@@ -30,7 +30,14 @@ public class SpawnService {
 
         if (eligibleLanes.isEmpty()) return;
 
-        Lane lane = eligibleLanes.get(rng.nextInt(eligibleLanes.size()));
+        Lane lane;
+        if (isPriority) {
+            List<Lane> lane0s = eligibleLanes.stream().filter(l -> l.getLaneIndex() == 0).toList();
+            if (lane0s.isEmpty()) return;
+            lane = lane0s.get(rng.nextInt(lane0s.size()));
+        } else {
+            lane = eligibleLanes.get(rng.nextInt(eligibleLanes.size()));
+        }
         double x = lane.getStartX(), y = lane.getStartY();
 
         // Create vehicle based on lane index:

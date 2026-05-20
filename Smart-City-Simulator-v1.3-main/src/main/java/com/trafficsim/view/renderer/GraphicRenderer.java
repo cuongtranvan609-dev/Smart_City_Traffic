@@ -40,7 +40,7 @@ public class GraphicRenderer implements SceneRenderer {
         }
 
         // 1. Draw Sidewalk Background Grid
-        drawBackground(gc, minX, maxX, minY, maxY);
+        drawBackground(gc, scene, minX, maxX, minY, maxY);
         
         // 2. Draw Procedural City Blocks (Buildings, Parks, Trees)
         drawCityBlocks(gc, scene, minX, maxX, minY, maxY);
@@ -64,22 +64,25 @@ public class GraphicRenderer implements SceneRenderer {
         gc.restore();
     }
 
-    private void drawBackground(GraphicsContext gc, double minX, double maxX, double minY, double maxY) {
-        gc.setFill(c(SIDEWALK));
+    private void drawBackground(GraphicsContext gc, SimScene scene, double minX, double maxX, double minY, double maxY) {
+        // Base grass/parkland terrain (Green)
+        gc.setFill(c(Color.rgb(125, 185, 105)));
         gc.fillRect(minX, minY, maxX - minX, maxY - minY);
         
-        // Pavement grid lines
-        gc.setStroke(c(Color.rgb(195, 195, 195)));
-        gc.setLineWidth(1.5);
-        // Align grid
-        double startX = Math.floor(minX / 24) * 24;
-        double startY = Math.floor(minY / 24) * 24;
-        
-        for (double i = startX; i < maxX; i += 24) {
-            gc.strokeLine(i, minY, i, maxY);
+        // Draw sidewalks along all roads
+        gc.setStroke(c(SIDEWALK));
+        double fullW = SimConfig.LANE_WIDTH * 8;
+        gc.setLineWidth(fullW + 36);
+        gc.setLineCap(javafx.scene.shape.StrokeLineCap.BUTT);
+        for (Road r : scene.getRoads()) {
+            gc.strokeLine(r.getX1(), r.getY1(), r.getX2(), r.getY2());
         }
-        for (double i = startY; i < maxY; i += 24) {
-            gc.strokeLine(minX, i, maxX, i);
+        
+        // Draw sidewalks around all intersections
+        gc.setFill(c(SIDEWALK));
+        for (Intersection i : scene.getIntersections()) {
+            double r = i.getRadius() + 18;
+            gc.fillOval(i.getCx() - r, i.getCy() - r, r * 2, r * 2);
         }
     }
 
@@ -150,6 +153,48 @@ public class GraphicRenderer implements SceneRenderer {
             drawTree(gc, x + size - 25, y + 25, rng);
             drawTree(gc, x + 25, y + size - 25, rng);
             drawTree(gc, x + size - 25, y + size - 25, rng);
+        } else if (type == 1) {
+            // Solar Farm (Smart City Clean Energy)
+            gc.setFill(c(Color.rgb(190, 195, 200))); // concrete base
+            gc.fillRect(x + pad + 2, y + pad + 2, size - pad*2 - 4, size - pad*2 - 4);
+            
+            // Draw solar panel grids
+            gc.setFill(c(Color.rgb(20, 60, 120))); // Dark Blue Silicon
+            gc.setStroke(c(Color.rgb(180, 180, 190))); // Aluminum Frame
+            gc.setLineWidth(1.2);
+            for (double px = x + pad + 8; px < x + size - pad - 20; px += 24) {
+                for (double py = y + pad + 8; py < y + size - pad - 20; py += 24) {
+                    gc.fillRect(px, py, 18, 14);
+                    gc.strokeRect(px, py, 18, 14);
+                    // Draw grid reflection lines on silicon
+                    gc.setStroke(Color.rgb(255, 255, 255, 0.2));
+                    gc.strokeLine(px + 4, py + 2, px + 14, py + 12);
+                    gc.setStroke(c(Color.rgb(180, 180, 190)));
+                }
+            }
+        } else if (type == 2) {
+            // Plaza Garden with Pond and Flowers
+            gc.setFill(c(Color.rgb(222, 210, 190))); // Brick/sand paths
+            gc.fillRect(x + pad + 2, y + pad + 2, size - pad*2 - 4, size - pad*2 - 4);
+            
+            // Pond in the center
+            gc.setFill(c(Color.rgb(80, 160, 200)));
+            gc.fillOval(x + size/2 - 20, y + size/2 - 20, 40, 40);
+            gc.setStroke(c(Color.rgb(140, 130, 120)));
+            gc.setLineWidth(2.0);
+            gc.strokeOval(x + size/2 - 20, y + size/2 - 20, 40, 40);
+            
+            // Bushes and trees
+            drawTree(gc, x + 25, y + 25, rng);
+            drawTree(gc, x + size - 25, y + size - 25, rng);
+            
+            // Flower beds (red/yellow spots)
+            gc.setFill(c(Color.rgb(230, 80, 120))); // Red/Pink
+            gc.fillOval(x + size/2 - 28, y + 20, 5, 5);
+            gc.fillOval(x + size/2 - 20, y + 18, 5, 5);
+            gc.setFill(c(Color.rgb(250, 200, 50))); // Yellow
+            gc.fillOval(x + 20, y + size/2 + 10, 5, 5);
+            gc.fillOval(x + 24, y + size/2 + 18, 5, 5);
         } else {
             // Building
             double bW = size * (0.55 + rng.nextDouble() * 0.25);
@@ -171,13 +216,26 @@ public class GraphicRenderer implements SceneRenderer {
             gc.setLineWidth(3);
             gc.strokeRect(bx, by, bW, bH);
             
-            // AC Units
-            gc.setFill(c(Color.rgb(170, 170, 170)));
-            gc.fillRect(bx + 12, by + 12, 14, 14);
-            gc.setFill(c(Color.rgb(90, 90, 90)));
-            gc.fillOval(bx + 14, by + 14, 10, 10);
+            // AC Units / Helipad
+            if (bW > 60 && bH > 60 && rng.nextBoolean()) {
+                // Draw Helipad
+                double cx = bx + bW/2;
+                double cy = by + bH/2;
+                gc.setStroke(c(Color.WHITE));
+                gc.setLineWidth(2.0);
+                gc.strokeOval(cx - 15, cy - 15, 30, 30);
+                gc.setFill(c(Color.WHITE));
+                gc.setFont(Font.font("Arial Bold", 14));
+                gc.setTextAlign(TextAlignment.CENTER);
+                gc.fillText("H", cx, cy + 5);
+            } else {
+                gc.setFill(c(Color.rgb(170, 170, 170)));
+                gc.fillRect(bx + 12, by + 12, 14, 14);
+                gc.setFill(c(Color.rgb(90, 90, 90)));
+                gc.fillOval(bx + 14, by + 14, 10, 10);
+            }
             
-            if (bW > 50 && bH > 50 && rng.nextBoolean()) {
+            if (bW > 50 && bH > 50 && rng.nextBoolean() && !(bW > 60 && bH > 60)) {
                 gc.setFill(c(Color.rgb(170, 170, 170)));
                 gc.fillRect(bx + bW - 26, by + bH - 26, 14, 14);
                 gc.setFill(c(Color.rgb(90, 90, 90)));

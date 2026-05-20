@@ -74,7 +74,7 @@ public class Renderer3D implements SceneRenderer {
         }
 
         // 1. Draw flat ground elements
-        drawBackground(gc, minX, maxX, minY, maxY);
+        drawBackground(gc, scene, minX, maxX, minY, maxY);
         scene.getRoads().forEach(r -> drawRoad(gc, r, scene));
         scene.getIntersections().forEach(i -> drawIntersection(gc, i));
         BasicRenderer.drawTurnGuides(gc, scene);
@@ -115,20 +115,25 @@ public class Renderer3D implements SceneRenderer {
         gc.restore();
     }
 
-    private void drawBackground(GraphicsContext gc, double minX, double maxX, double minY, double maxY) {
-        gc.setFill(c(SIDEWALK));
+    private void drawBackground(GraphicsContext gc, SimScene scene, double minX, double maxX, double minY, double maxY) {
+        // Base grass/parkland terrain (Green)
+        gc.setFill(c(Color.rgb(125, 185, 105)));
         gc.fillRect(minX, minY, maxX - minX, maxY - minY);
         
-        gc.setStroke(c(Color.rgb(195, 195, 195)));
-        gc.setLineWidth(1.5);
-        double startX = Math.floor(minX / 24) * 24;
-        double startY = Math.floor(minY / 24) * 24;
-        
-        for (double i = startX; i < maxX; i += 24) {
-            gc.strokeLine(i, minY, i, maxY);
+        // Draw sidewalks along all roads
+        gc.setStroke(c(SIDEWALK));
+        double fullW = SimConfig.LANE_WIDTH * 8;
+        gc.setLineWidth(fullW + 36);
+        gc.setLineCap(javafx.scene.shape.StrokeLineCap.BUTT);
+        for (Road r : scene.getRoads()) {
+            gc.strokeLine(r.getX1(), r.getY1(), r.getX2(), r.getY2());
         }
-        for (double i = startY; i < maxY; i += 24) {
-            gc.strokeLine(minX, i, maxX, i);
+        
+        // Draw sidewalks around all intersections
+        gc.setFill(c(SIDEWALK));
+        for (Intersection i : scene.getIntersections()) {
+            double r = i.getRadius() + 18;
+            gc.fillOval(i.getCx() - r, i.getCy() - r, r * 2, r * 2);
         }
     }
 
@@ -350,6 +355,53 @@ public class Renderer3D implements SceneRenderer {
             addTreeToRenderables(gc, renderables, x + size - 25, y + 25, rng);
             addTreeToRenderables(gc, renderables, x + 25, y + size - 25, rng);
             addTreeToRenderables(gc, renderables, x + size - 25, y + size - 25, rng);
+        } else if (type == 1) {
+            // 3D Solar Farm
+            gc.setFill(c(Color.rgb(190, 195, 200))); // concrete base
+            gc.fillRect(x + pad + 2, y + pad + 2, size - pad*2 - 4, size - pad*2 - 4);
+            
+            // Add a small 3D power grid building in the center
+            double bSize = 25;
+            double bx = x + size/2 - bSize/2;
+            double by = y + size/2 - bSize/2;
+            renderables.add(new Renderable3D(by + bSize/2 - 0.5 * (bx + bSize/2), () -> 
+                draw3DBuilding(gc, bx, by, bSize, bSize, 22.0, Color.rgb(100, 110, 120), rng)
+            ));
+            
+            // Draw flat solar panels around it
+            for (double px = x + pad + 8; px < x + size - pad - 20; px += 28) {
+                for (double py = y + pad + 8; py < y + size - pad - 20; py += 28) {
+                    if (Math.abs(px - (x + size/2)) < 20 && Math.abs(py - (y + size/2)) < 20) continue;
+                    double fpx = px;
+                    double fpy = py;
+                    renderables.add(new Renderable3D(fpy - 0.5 * fpx, () -> {
+                        double[] p1 = getProjPt(fpx + 8, fpy + 4, 0, -8, -6, 0);
+                        double[] p2 = getProjPt(fpx + 8, fpy + 4, 0, 8, -6, 0);
+                        double[] p3 = getProjPt(fpx + 8, fpy + 4, 0, 8, 6, 2.0); // tilted!
+                        double[] p4 = getProjPt(fpx + 8, fpy + 4, 0, -8, 6, 2.0); // tilted!
+                        
+                        gc.setFill(c(Color.rgb(20, 60, 120)));
+                        gc.fillPolygon(new double[]{p1[0], p2[0], p3[0], p4[0]}, new double[]{p1[1], p2[1], p3[1], p4[1]}, 4);
+                        gc.setStroke(c(Color.rgb(180, 180, 190)));
+                        gc.setLineWidth(1.0);
+                        gc.strokePolygon(new double[]{p1[0], p2[0], p3[0], p4[0]}, new double[]{p1[1], p2[1], p3[1], p4[1]}, 4);
+                    }));
+                }
+            }
+        } else if (type == 2) {
+            // 3D Plaza Garden
+            gc.setFill(c(Color.rgb(222, 210, 190))); // brick paths
+            gc.fillRect(x + pad + 2, y + pad + 2, size - pad*2 - 4, size - pad*2 - 4);
+            
+            // Pond in the center
+            gc.setFill(c(Color.rgb(80, 160, 200)));
+            gc.fillOval(x + size/2 - 20, y + size/2 - 20, 40, 40);
+            gc.setStroke(c(Color.rgb(140, 130, 120)));
+            gc.setLineWidth(2.0);
+            gc.strokeOval(x + size/2 - 20, y + size/2 - 20, 40, 40);
+            
+            addTreeToRenderables(gc, renderables, x + 25, y + 25, rng);
+            addTreeToRenderables(gc, renderables, x + size - 25, y + size - 25, rng);
         } else {
             double bW = size * (0.55 + rng.nextDouble() * 0.25);
             double bD = size * (0.55 + rng.nextDouble() * 0.25);
@@ -444,13 +496,30 @@ public class Renderer3D implements SceneRenderer {
         gc.setLineWidth(1.5);
         gc.strokePolygon(new double[]{rx1, rx2, rx3, rx4}, new double[]{ry1, ry2, ry3, ry4}, 4);
         
-        gc.setFill(c(Color.rgb(130, 130, 130)));
-        double acSize = 10;
-        double acx = rx1 + (rx3 - rx1)*0.3;
-        double acy = ry1 + (ry3 - ry1)*0.3;
-        gc.fillRect(acx, acy, acSize, acSize);
-        gc.setFill(c(Color.rgb(70, 70, 70)));
-        gc.fillOval(acx + 1.5, acy + 1.5, acSize - 3, acSize - 3);
+        if (bW > 50 && bD > 50 && rng.nextBoolean()) {
+            // Helipad on 3D roof
+            double rcx = (rx1 + rx3) / 2.0;
+            double rcy = (ry1 + ry3) / 2.0;
+            
+            gc.setStroke(c(Color.WHITE));
+            gc.setLineWidth(1.5);
+            double hRad = Math.min(bW, bD) * 0.25;
+            gc.strokeOval(rcx - hRad, rcy - hRad * 0.7, hRad * 2, hRad * 1.4);
+            
+            gc.setFill(c(Color.WHITE));
+            gc.setFont(Font.font("Arial Bold", Math.max(8, hRad * 0.8)));
+            gc.setTextAlign(TextAlignment.CENTER);
+            gc.fillText("H", rcx, rcy + hRad * 0.3);
+        } else {
+            // AC Units
+            gc.setFill(c(Color.rgb(130, 130, 130)));
+            double acSize = 10;
+            double acx = rx1 + (rx3 - rx1)*0.3;
+            double acy = ry1 + (ry3 - ry1)*0.3;
+            gc.fillRect(acx, acy, acSize, acSize);
+            gc.setFill(c(Color.rgb(70, 70, 70)));
+            gc.fillOval(acx + 1.5, acy + 1.5, acSize - 3, acSize - 3);
+        }
     }
 
     private void drawWindowsOnWall(GraphicsContext gc, double[] A, double[] B, double[] C, double[] D, double bHeight) {

@@ -17,9 +17,9 @@ public class SceneBuilder {
     public static SimScene buildThreeWay() {
         SimScene s = new SimScene(SimScene.SceneType.THREE_WAY);
         double cx = SimConfig.CANVAS_WIDTH / 2, cy = SimConfig.CANVAS_HEIGHT / 2;
-        s.addRoad(new Road(0,  cy, cx, cy));
-        s.addRoad(new Road(cx, cy, SimConfig.CANVAS_WIDTH, cy));
-        s.addRoad(new Road(cx, 0,  cx, cy));
+        s.addRoad(new Road(cx - SimConfig.MAP_MARGIN,  cy, cx, cy));
+        s.addRoad(new Road(cx, cy, cx + SimConfig.MAP_MARGIN, cy));
+        s.addRoad(new Road(cx, cy - SimConfig.MAP_MARGIN,  cx, cy));
         s.addIntersection(new ThreeWayIntersection(cx, cy));
         finalize(s);
         return s;
@@ -28,10 +28,10 @@ public class SceneBuilder {
     public static SimScene buildFourWay() {
         SimScene s = new SimScene(SimScene.SceneType.FOUR_WAY);
         double cx = SimConfig.CANVAS_WIDTH / 2, cy = SimConfig.CANVAS_HEIGHT / 2;
-        s.addRoad(new Road(0, cy, cx, cy));
-        s.addRoad(new Road(cx, cy, SimConfig.CANVAS_WIDTH, cy));
-        s.addRoad(new Road(cx, 0, cx, cy));
-        s.addRoad(new Road(cx, cy, cx, SimConfig.CANVAS_HEIGHT));
+        s.addRoad(new Road(cx - SimConfig.MAP_MARGIN, cy, cx, cy));
+        s.addRoad(new Road(cx, cy, cx + SimConfig.MAP_MARGIN, cy));
+        s.addRoad(new Road(cx, cy - SimConfig.MAP_MARGIN, cx, cy));
+        s.addRoad(new Road(cx, cy, cx, cy + SimConfig.MAP_MARGIN));
         s.addIntersection(new FourWayIntersection(cx, cy));
         finalize(s);
         return s;
@@ -42,7 +42,7 @@ public class SceneBuilder {
         double cx = SimConfig.CANVAS_WIDTH / 2, cy = SimConfig.CANVAS_HEIGHT / 2;
         FiveWayIntersection inter = new FiveWayIntersection(cx, cy, false);
         s.addIntersection(inter);
-        double len = 280;
+        double len = SimConfig.MAP_MARGIN;
         for (int i = 0; i < 5; i++) {
             double[] ep = inter.getArmEndPoint(i, len);
             s.addRoad(new Road(cx, cy, ep[0], ep[1]));
@@ -98,7 +98,7 @@ public class SceneBuilder {
             s.addRoad(new Road(n[e[0]][0], n[e[0]][1], n[e[1]][0], n[e[1]][1]));
 
         // Perimeter stubs for spawning/exiting
-        double stub = 90;
+        double stub = SimConfig.MAP_MARGIN;
         addStub(s, n[0], -1, 0, stub); addStub(s, n[0], 0, -1, stub);
         addStub(s, n[1], 0, -1, stub);
         addStub(s, n[2], 1, 0, stub);  addStub(s, n[2], 0, -1, stub);

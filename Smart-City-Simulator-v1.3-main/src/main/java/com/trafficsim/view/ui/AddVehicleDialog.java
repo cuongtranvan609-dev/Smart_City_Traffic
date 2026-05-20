@@ -77,9 +77,11 @@ public class AddVehicleDialog extends Dialog<Vehicle> {
 
             // Find a lane for this direction
             Lane targetLane = null;
+            boolean isPriorityVal = "Cứu thương".equals(typeBox.getValue()) || "Cứu hỏa".equals(typeBox.getValue());
             outer:
             for (Road road : scene.getRoads()) {
                 for (Lane lane : road.getLanesForDirection(dir)) {
+                    if (isPriorityVal && lane.getLaneIndex() != 0) continue;
                     if (lane.hasSpaceFor(createDummy(0,0,dir))) {
                         targetLane = lane; break outer;
                     }

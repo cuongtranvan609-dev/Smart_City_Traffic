@@ -48,6 +48,7 @@ public final class SimConfig {
     public static final double MIN_ZOOM    = 0.3;
     public static final double MAX_ZOOM    = 3.0;
     public static final double DEFAULT_ZOOM = 1.0;
+    public static final double MAP_MARGIN   = 800;
 
     // Network scene - 10 intersections, mixed types
     public static final double NETWORK_SPACING_X = 360;

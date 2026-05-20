@@ -105,6 +105,8 @@ public class TrafficController {
                             double relY = other.getY() - v.getY();
                             double dot = relX * v.getMoveX() + relY * v.getMoveY();
                             if (dot > 0) {
+                                double dist = Math.hypot(relX, relY);
+                                boolean conflict = false;
                                 boolean samePath = false;
                                 if (inter instanceof FiveWayIntersection) {
                                     Lane myExit = v.getUpcomingExitLane();
@@ -118,7 +120,15 @@ public class TrafficController {
                                 }
                                 
                                 if (samePath) {
-                                    double dist = Math.hypot(relX, relY);
+                                    conflict = true;
+                                } else {
+                                    // Paths cross: close distance and other has higher right-of-way
+                                    if (dist < 55.0 && compareRightOfWay(v, other, inter) < 0) {
+                                        conflict = true;
+                                    }
+                                }
+                                
+                                if (conflict) {
                                     if (dist < minDist && dist < 120) {
                                         minDist = dist;
                                         closest = other;
@@ -486,7 +496,7 @@ public class TrafficController {
             return chooseFiveWayExitLane(v, inter);
         }
         Direction exitDir = desiredExitDirection(v, inter);
-        return findOutboundLane(inter, exitDir, v.getPreferredLaneIndex(), v.getCurrentLane());
+        return findOutboundLane(v, inter, exitDir, v.getPreferredLaneIndex(), v.getCurrentLane());
     }
 
     private Direction desiredExitDirection(Vehicle v, Intersection inter) {
@@ -640,7 +650,7 @@ public class TrafficController {
         v.setY(p[1]);
     }
 
-    private Lane findOutboundLane(Intersection inter, Direction exitDir, int preferredIdx, Lane entryLane) {
+    private Lane findOutboundLane(Vehicle v, Intersection inter, Direction exitDir, int preferredIdx, Lane entryLane) {
         Lane bestLane = null;
         double bestScore = Double.MAX_VALUE;
         for (Road road : scene.getRoads()) {
@@ -652,6 +662,9 @@ public class TrafficController {
                 boolean entryIsBicycle = entryLane != null && entryLane.getLaneIndex() == 3;
                 boolean targetIsBicycle = lane.getLaneIndex() == 3;
                 if (entryIsBicycle != targetIsBicycle) continue;
+
+                // Priority vehicles stay in lane 0
+                if (v.isPriorityVehicle() && lane.getLaneIndex() != 0) continue;
 
                 double d = Math.hypot(lane.getStartX() - inter.getCx(), lane.getStartY() - inter.getCy());
                 double score = d + (lane.getLaneIndex() == preferredIdx ? 0 : 1000);
@@ -666,7 +679,7 @@ public class TrafficController {
 
     private Lane chooseFiveWayExitLane(Vehicle v, Intersection inter) {
         List<Lane> candidates = new ArrayList<>();
-        int preferredIdx = v.getPreferredLaneIndex();
+        int preferredIdx = v.isPriorityVehicle() ? 0 : v.getPreferredLaneIndex();
         boolean isBicycle = v instanceof com.trafficsim.model.vehicle.Bicycle;
         for (Road road : scene.getRoads()) {
             for (Lane lane : road.getLanes()) {
@@ -676,7 +689,11 @@ public class TrafficController {
                 boolean targetIsBicycle = lane.getLaneIndex() == 3;
                 if (isBicycle != targetIsBicycle) continue;
 
-                if (lane.getLaneIndex() == preferredIdx) candidates.add(lane);
+                if (v.isPriorityVehicle()) {
+                    if (lane.getLaneIndex() == 0) candidates.add(lane);
+                } else {
+                    if (lane.getLaneIndex() == preferredIdx) candidates.add(lane);
+                }
             }
         }
 
@@ -686,7 +703,9 @@ public class TrafficController {
                     if (laneStartsAtIntersection(lane, inter) && !isUTurn(v.getCurrentLane(), lane)) {
                         boolean targetIsBicycle = lane.getLaneIndex() == 3;
                         if (isBicycle == targetIsBicycle) {
-                            candidates.add(lane);
+                            if (!v.isPriorityVehicle() || lane.getLaneIndex() == 0) {
+                                candidates.add(lane);
+                            }
                         }
                     }
                 }
@@ -782,9 +801,24 @@ public class TrafficController {
     }
 
     private void removeOutOfBounds() {
-        double m = 70, W = SimConfig.CANVAS_WIDTH, H = SimConfig.CANVAS_HEIGHT;
+        double m = 70;
+        double minX = -m, maxX = SimConfig.CANVAS_WIDTH + m;
+        double minY = -m, maxY = SimConfig.CANVAS_HEIGHT + m;
+
+        if (!scene.getIntersections().isEmpty()) {
+            double interMinX = scene.getIntersections().stream().mapToDouble(Intersection::getCx).min().orElse(0);
+            double interMaxX = scene.getIntersections().stream().mapToDouble(Intersection::getCx).max().orElse(0);
+            double interMinY = scene.getIntersections().stream().mapToDouble(Intersection::getCy).min().orElse(0);
+            double interMaxY = scene.getIntersections().stream().mapToDouble(Intersection::getCy).max().orElse(0);
+
+            minX = interMinX - SimConfig.MAP_MARGIN - m;
+            maxX = interMaxX + SimConfig.MAP_MARGIN + m;
+            minY = interMinY - SimConfig.MAP_MARGIN - m;
+            maxY = interMaxY + SimConfig.MAP_MARGIN + m;
+        }
+
         for (Vehicle v : scene.getVehicles()) {
-            if (v.getX() < -m || v.getX() > W + m || v.getY() < -m || v.getY() > H + m) {
+            if (v.getX() < minX || v.getX() > maxX || v.getY() < minY || v.getY() > maxY) {
                 routedIntersections.remove(v.getId());
                 scene.removeVehicle(v);
             }
@@ -965,7 +999,7 @@ public class TrafficController {
             }
         }
 
-        // Find an entry lane for this intersection (motorized lanes 0, 1, 2)
+        // Find an entry lane for this intersection (motorized lane 0 only)
         Lane entryLane = null;
         for (Road road : scene.getRoads()) {
             for (Lane lane : road.getLanes()) {
@@ -976,20 +1010,9 @@ public class TrafficController {
             }
             if (entryLane != null) break;
         }
-        if (entryLane == null) {
-            for (Road road : scene.getRoads()) {
-                for (Lane lane : road.getLanes()) {
-                    if (laneEndsAtIntersection(lane, inter) && lane.getLaneIndex() < 3) {
-                        entryLane = lane;
-                        break;
-                    }
-                }
-                if (entryLane != null) break;
-            }
-        }
         if (entryLane == null) return;
 
-        // Choose exit lane (motorized lanes 0, 1, 2)
+        // Choose exit lane (motorized lane 0 only)
         Lane exitLane = null;
         for (Road road : scene.getRoads()) {
             for (Lane lane : road.getLanes()) {
@@ -999,17 +1022,6 @@ public class TrafficController {
                 }
             }
             if (exitLane != null) break;
-        }
-        if (exitLane == null) {
-            for (Road road : scene.getRoads()) {
-                for (Lane lane : road.getLanes()) {
-                    if (laneStartsAtIntersection(lane, inter) && !isUTurn(entryLane, lane) && lane.getLaneIndex() < 3) {
-                        exitLane = lane;
-                        break;
-                    }
-                }
-                if (exitLane != null) break;
-            }
         }
         if (exitLane == null) exitLane = entryLane; // fallback
 

@@ -44,3 +44,35 @@
 .separator .line {
     -fx-border-color: #444455;
 }
+
+.dialog-pane {
+    -fx-background-color: #1e1e2e;
+}
+
+.dialog-pane .label {
+    -fx-text-fill: #cccccc;
+}
+
+.dialog-pane .button {
+    -fx-background-color: #3a3a4c;
+    -fx-text-fill: white;
+    -fx-background-radius: 4px;
+}
+
+.dialog-pane .button:hover {
+    -fx-background-color: #4c4c64;
+}
+
+.dialog-pane .combo-box {
+    -fx-background-color: #2a2a3a;
+    -fx-text-fill: white;
+}
+
+.slider .thumb {
+    -fx-background-color: #80d8ff;
+}
+
+.slider .track {
+    -fx-background-color: #2a2a3a;
+}
+

@@ -240,10 +240,7 @@ public abstract class Vehicle {
             double dy = frontVehicle.getY() - y;
             double dist = Math.hypot(dx, dy);
             if (dist < minAllowedDist && dist > 0.001) {
-                double overlap = minAllowedDist - dist;
-                x -= getMoveX() * overlap;
-                y -= getMoveY() * overlap;
-                speed = 0;
+                speed = 0; // Stop smoothly instead of jumping backward
             }
         }
 
@@ -275,6 +272,7 @@ public abstract class Vehicle {
 
     /** Try to change to sibling lane for overtaking. Returns true if succeeded. */
     public boolean tryOvertake() {
+        if (isPriorityVehicle()) return false; // Priority vehicles stay in the innermost lane (lane 0)
         if (overtaking || followingPath || currentLane == null || laneChangePrepTimer > 0 || pendingLaneChangeTarget != null) return false;
         Lane left = currentLane.getLeftSibling();
         Lane right = currentLane.getRightSibling();
@@ -313,10 +311,13 @@ public abstract class Vehicle {
     public boolean performSmoothLaneChange(Lane target) {
         if (target == null || currentLane == null || laneChangePrepTimer > 0 || pendingLaneChangeTarget != null || overtaking || followingPath) return false;
         
-        // Check bicycle lane constraints
+        // Bicycle lane safety constraint
         boolean isBicycle = this instanceof com.trafficsim.model.vehicle.Bicycle;
         boolean targetIsBicycleLane = target.getLaneIndex() == 3;
         if (isBicycle != targetIsBicycleLane) return false;
+
+        // Priority vehicles stay in lane 0
+        if (isPriorityVehicle() && target.getLaneIndex() != 0) return false;
 
         boolean movingLeft = target.getLaneIndex() < currentLane.getLaneIndex();
         if (target.hasSpaceNear(x, y, length + 20)) {
@@ -438,10 +439,7 @@ public abstract class Vehicle {
             double dy = frontVehicle.getY() - y;
             double dist = Math.hypot(dx, dy);
             if (dist < minAllowedDist && dist > 0.001) {
-                double overlap = minAllowedDist - dist;
-                pathProgress = Math.max(0, pathProgress - overlap);
-                setPathPosition(pathProgress);
-                speed = 0;
+                speed = 0; // Stop smoothly instead of jumping backward
             }
         }
 
