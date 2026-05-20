@@ -1,0 +1,46 @@
+/* Smart City Traffic Simulation – App Stylesheet */
+
+.root {
+    -fx-background-color: #0f0f1a;
+    -fx-font-family: "Segoe UI", "Arial", sans-serif;
+}
+
+.scroll-pane {
+    -fx-background-color: transparent;
+}
+
+.scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.radio-button {
+    -fx-text-fill: #cccccc;
+    -fx-font-size: 11px;
+}
+
+.radio-button:selected {
+    -fx-text-fill: #80d8ff;
+}
+
+.check-box {
+    -fx-text-fill: #cccccc;
+}
+
+.check-box:selected {
+    -fx-text-fill: #80ff80;
+}
+
+.combo-box {
+    -fx-background-color: #2a2a3a;
+    -fx-text-fill: white;
+    -fx-prompt-text-fill: #888;
+}
+
+.combo-box .list-cell {
+    -fx-text-fill: white;
+    -fx-background-color: #2a2a3a;
+}
+
+.separator .line {
+    -fx-border-color: #444455;
+}
