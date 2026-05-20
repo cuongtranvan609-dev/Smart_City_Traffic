@@ -30,6 +30,15 @@ public class TrafficLight {
     private double x, y;
     /** Hướng của nhánh đường mà đèn này kiểm soát */
     private Direction direction;
+    private Double customAngle = null;
+
+    public double getAngleDeg() {
+        return customAngle != null ? customAngle : direction.angleDeg;
+    }
+
+    public void setAngleDeg(double angle) {
+        this.customAngle = angle;
+    }
 
     public TrafficLight(double x, double y, Direction direction, Phase initialPhase) {
         this.x             = x;

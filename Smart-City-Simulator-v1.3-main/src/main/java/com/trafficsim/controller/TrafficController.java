@@ -9,6 +9,7 @@ import com.trafficsim.model.intersection.Intersection;
 import com.trafficsim.model.road.Lane;
 import com.trafficsim.model.road.Road;
 import com.trafficsim.model.vehicle.Vehicle;
+import com.trafficsim.model.vehicle.PoliceCar;
 import com.trafficsim.service.SoundService;
 import com.trafficsim.service.SpawnService;
 import java.util.ArrayList;
@@ -24,6 +25,8 @@ public class TrafficController {
     private final SoundService soundService;
     private final Random rng = new Random();
     private final Map<String, Intersection> routedIntersections = new HashMap<>();
+    private boolean autoPoliceEnabled = true;
+    private double jamTimer = 0.0;
 
     private double spawnInterval;
     private double spawnTimer = 0;
@@ -60,6 +63,7 @@ public class TrafficController {
     }
 
     public void update(double dt) {
+        updateStuckVehicles(dt);
         scene.getIntersections().forEach(i -> i.update(dt));
         handlePriorityYielding();
         handleIntersectionYielding();
@@ -83,7 +87,7 @@ public class TrafficController {
             Lane lane = v.getCurrentLane();
             if (lane == null) continue;
 
-            Vehicle front = lane.getFrontVehicle(v);
+            Vehicle front = getFrontVehicleFiltered(v, lane);
             if (v.isFollowingPath()) {
                 Intersection inter = routedIntersections.get(v.getId());
                 if (inter != null) {
@@ -91,6 +95,7 @@ public class TrafficController {
                     double minDist = Double.MAX_VALUE;
                     for (Vehicle other : scene.getVehicles()) {
                         if (other == v) continue;
+                        if (shouldIgnoreCollision(v, other)) continue;
                         if (inter.contains(other) || other.isFollowingPath()) {
                             double relX = other.getX() - v.getX();
                             double relY = other.getY() - v.getY();
@@ -141,11 +146,12 @@ public class TrafficController {
     }
 
     private boolean shouldYieldToPriority(Vehicle v, Vehicle priority) {
+        if (shouldIgnoreCollision(v, priority)) return false;
         Lane lane = v.getCurrentLane();
         Lane priorityLane = priority.getCurrentLane();
         if (lane == null || priorityLane == null) return false;
         if (v.isFollowingPath()) return false;
-        if (lane != priorityLane) return false;
+        if (!sameTravelGroup(lane, priorityLane)) return false;
 
         double dx = v.getX() - priority.getX();
         double dy = v.getY() - priority.getY();
@@ -169,7 +175,7 @@ public class TrafficController {
                     occupied = true; break;
                 }
             }
-            if (!occupied) offset = SimConfig.LANE_WIDTH;
+            if (!occupied) offset = rightLane.getWidth();
             else offset = SimConfig.SHOULDER_YIELD_OFFSET * 0.5;
         }
 
@@ -279,6 +285,7 @@ public class TrafficController {
 
     private boolean shouldYieldToPriorityAtIntersection(Vehicle v, Vehicle priority, Intersection inter) {
         if (v == priority || v.isPriorityVehicle() || !priority.isPriorityVehicle()) return false;
+        if (shouldIgnoreCollision(v, priority)) return false;
 
         double dist = v.distanceTo(priority);
         boolean vNear = v.isFollowingPath() || inter.contains(v)
@@ -296,12 +303,13 @@ public class TrafficController {
             return ahead > -v.getLength() && ahead < SimConfig.PRIORITY_YIELD_RANGE;
         }
 
-        return shouldYieldToIntersectionVehicle(v, priority, inter) || dist < SimConfig.INTERSECTION_YIELD_RANGE;
+        return shouldYieldToIntersectionVehicle(v, priority, inter) || dist < SimConfig.PRIORITY_YIELD_RANGE;
     }
 
     private boolean shouldYieldToIntersectionVehicle(Vehicle v, Vehicle other, Intersection inter) {
         if (v.isPriorityVehicle()) return false;
         if (v == other) return false;
+        if (shouldIgnoreCollision(v, other)) return false;
         Lane lane = v.getCurrentLane();
         Lane otherLane = other.getCurrentLane();
         if (lane == null || otherLane == null) return false;
@@ -560,9 +568,16 @@ public class TrafficController {
                 inter.getRadius() + v.getLength() * 0.9 + SimConfig.MIN_VEHICLE_GAP);
         double[] end = exitLane.pointAt(exitOffset);
         
-        // Lane-specific ring radius so vehicles don't overlap in roundabout
         int laneIdx = exitLane.getLaneIndex();
-        double ringR = 64 + laneIdx * SimConfig.LANE_WIDTH;
+        double ringR;
+        switch (laneIdx) {
+            case 0: ringR = 65.0; break;
+            case 1: ringR = 83.0; break;
+            case 2:
+            case 3: // Bicycles exit to lane 3, but use motorized lane 2 radius (101.0) inside the roundabout
+                ringR = 101.0; break;
+            default: ringR = 101.0; break;
+        }
 
         double entryA = Math.atan2(sy - cy, sx - cx);
         double exitA = Math.atan2(end[1] - cy, end[0] - cx);
@@ -628,6 +643,12 @@ public class TrafficController {
             for (Lane lane : road.getLanesForDirection(exitDir)) {
                 if (!laneStartsAtIntersection(lane, inter)) continue;
                 if (isUTurn(entryLane, lane)) continue;
+
+                // Keep bicycles on lane 3, motorized on 0-2
+                boolean entryIsBicycle = entryLane != null && entryLane.getLaneIndex() == 3;
+                boolean targetIsBicycle = lane.getLaneIndex() == 3;
+                if (entryIsBicycle != targetIsBicycle) continue;
+
                 double d = Math.hypot(lane.getStartX() - inter.getCx(), lane.getStartY() - inter.getCy());
                 double score = d + (lane.getLaneIndex() == preferredIdx ? 0 : 1000);
                 if (score < bestScore) {
@@ -642,10 +663,15 @@ public class TrafficController {
     private Lane chooseFiveWayExitLane(Vehicle v, Intersection inter) {
         List<Lane> candidates = new ArrayList<>();
         int preferredIdx = v.getPreferredLaneIndex();
+        boolean isBicycle = v instanceof com.trafficsim.model.vehicle.Bicycle;
         for (Road road : scene.getRoads()) {
             for (Lane lane : road.getLanes()) {
                 if (!laneStartsAtIntersection(lane, inter)) continue;
                 if (isUTurn(v.getCurrentLane(), lane)) continue;
+
+                boolean targetIsBicycle = lane.getLaneIndex() == 3;
+                if (isBicycle != targetIsBicycle) continue;
+
                 if (lane.getLaneIndex() == preferredIdx) candidates.add(lane);
             }
         }
@@ -654,7 +680,10 @@ public class TrafficController {
             for (Road road : scene.getRoads()) {
                 for (Lane lane : road.getLanes()) {
                     if (laneStartsAtIntersection(lane, inter) && !isUTurn(v.getCurrentLane(), lane)) {
-                        candidates.add(lane);
+                        boolean targetIsBicycle = lane.getLaneIndex() == 3;
+                        if (isBicycle == targetIsBicycle) {
+                            candidates.add(lane);
+                        }
                     }
                 }
             }
@@ -668,6 +697,9 @@ public class TrafficController {
             if (v.isFollowingPath() || v.isOvertaking() || v.isYieldingForPriority() || v.laneChangeSignalTimer > 0) continue;
             Lane lane = v.getCurrentLane();
             if (lane == null) continue;
+
+            // Bicycles stay on lane 3
+            if (v instanceof com.trafficsim.model.vehicle.Bicycle) continue;
 
             double dist = lane.distanceToStopLine(v);
             if (dist > 30 && dist < 150) { // Prep zone
@@ -690,7 +722,7 @@ public class TrafficController {
             if (v.isOvertaking() || v.isFollowingPath() || v.getCurrentLane() == null
                     || v.isYieldingForPriority() || v.isYieldingAtIntersection()) continue;
             if (!canOvertakeByBehavior(v)) continue;
-            Vehicle front = v.getCurrentLane().getFrontVehicle(v);
+            Vehicle front = getFrontVehicleFiltered(v, v.getCurrentLane());
             if (front == null) continue;
 
             double gap = v.longitudinalGapTo(front);
@@ -782,6 +814,290 @@ public class TrafficController {
             return true;
         }
         return false;
+    }
+
+    private void updateStuckVehicles(double dt) {
+        // 1. Manage active police cars
+        PoliceCar police = null;
+        for (Vehicle v : scene.getVehicles()) {
+            if (v instanceof PoliceCar) {
+                police = (PoliceCar) v;
+                break;
+            }
+        }
+
+        if (police != null) {
+            Intersection inter = police.getTargetIntersection();
+            double cx = inter.getCx(), cy = inter.getCy();
+            
+            if (police.getPoliceState() == PoliceCar.PoliceState.DRIVING_TO_INTERSECTION) {
+                double distToCenter = Math.hypot(police.getX() - cx, police.getY() - cy);
+                boolean reached = false;
+                if (inter instanceof FiveWayIntersection) {
+                    reached = distToCenter < inter.getRadius() * 0.9;
+                } else {
+                    reached = distToCenter < 22.0;
+                }
+                
+                if (reached) {
+                    police.setPoliceState(PoliceCar.PoliceState.REGULATING);
+                    police.setRegulateTimer(0.0);
+                }
+            } else if (police.getPoliceState() == PoliceCar.PoliceState.REGULATING) {
+                police.setRegulateTimer(police.getRegulateTimer() + dt);
+                if (police.getRegulateTimer() >= 0.8) {
+                    police.setRegulateTimer(0.0);
+                    
+                    // Find vehicles causing the jam inside this intersection conflict zone
+                    List<Vehicle> stuck = new ArrayList<>();
+                    for (Vehicle v : scene.getVehicles()) {
+                        if (v == police || v.isPriorityVehicle()) continue;
+                        if (v.getSpeed() > 0.15) continue;
+                        
+                        boolean atInter = (routedIntersections.get(v.getId()) == inter) || isInsideConflictZone(v, inter);
+                        if (atInter && !isStoppedForRedOrQueue(v)) {
+                            stuck.add(v);
+                        }
+                    }
+                    
+                    if (stuck.isEmpty()) {
+                        // All clear, drive away!
+                        police.setPoliceState(PoliceCar.PoliceState.DRIVING_AWAY);
+                    } else {
+                        // Select one vehicle to remove in order: motorbikes/bicycles first, then others
+                        Vehicle selected = null;
+                        
+                        // First pass: look for motorbike/bicycle
+                        for (Vehicle v : stuck) {
+                            if (v instanceof com.trafficsim.model.vehicle.Motorbike || v instanceof com.trafficsim.model.vehicle.Bicycle) {
+                                if (selected == null || v.distanceTo(police) < selected.distanceTo(police)) {
+                                    selected = v;
+                                }
+                            }
+                        }
+                        
+                        // Second pass: look for others (cars, buses)
+                        if (selected == null) {
+                            for (Vehicle v : stuck) {
+                                if (selected == null || v.distanceTo(police) < selected.distanceTo(police)) {
+                                    selected = v;
+                                }
+                            }
+                        }
+                        
+                        if (selected != null) {
+                            routedIntersections.remove(selected.getId());
+                            scene.removeVehicle(selected);
+                        }
+                    }
+                }
+            }
+        } else {
+            // No police car active, check for auto-spawn
+            if (autoPoliceEnabled) {
+                int stuckCount = 0;
+                for (Vehicle v : scene.getVehicles()) {
+                    if (v.getSpeed() < 0.15 && !isStoppedForRedOrQueue(v) && !(v instanceof PoliceCar)) {
+                        stuckCount++;
+                    }
+                }
+                
+                if (stuckCount >= 5) {
+                    jamTimer += dt;
+                    if (jamTimer >= 3.0) {
+                        triggerManualPolice(); // triggers at the most congested intersection
+                        jamTimer = 0.0;
+                    }
+                } else {
+                    jamTimer = Math.max(0.0, jamTimer - dt);
+                }
+            }
+        }
+    }
+
+    private boolean shouldIgnoreCollision(Vehicle v1, Vehicle v2) {
+        return false;
+    }
+
+    public void setAutoPoliceEnabled(boolean enabled) {
+        this.autoPoliceEnabled = enabled;
+    }
+
+    public boolean isAutoPoliceEnabled() {
+        return autoPoliceEnabled;
+    }
+
+    public void triggerManualPolice() {
+        Intersection best = null;
+        int maxStuck = -1;
+        for (Intersection inter : scene.getIntersections()) {
+            int stuck = 0;
+            for (Vehicle v : scene.getVehicles()) {
+                if (v.getSpeed() < 0.15 && !(v instanceof PoliceCar) && !v.isPriorityVehicle()) {
+                    boolean atInter = (routedIntersections.get(v.getId()) == inter) || isInsideConflictZone(v, inter);
+                    if (atInter && !isStoppedForRedOrQueue(v)) {
+                        stuck++;
+                    }
+                }
+            }
+            if (stuck > maxStuck) {
+                maxStuck = stuck;
+                best = inter;
+            }
+        }
+        if (best == null && !scene.getIntersections().isEmpty()) {
+            best = scene.getIntersections().get(0);
+        }
+        if (best != null) {
+            spawnPoliceCar(best);
+        }
+    }
+
+    public void spawnPoliceCar(Intersection inter) {
+        // Only one active police car at a time
+        for (Vehicle v : scene.getVehicles()) {
+            if (v instanceof PoliceCar) {
+                return;
+            }
+        }
+
+        // Find an entry lane for this intersection (motorized lanes 0, 1, 2)
+        Lane entryLane = null;
+        for (Road road : scene.getRoads()) {
+            for (Lane lane : road.getLanes()) {
+                if (laneEndsAtIntersection(lane, inter) && lane.getLaneIndex() == 0) {
+                    entryLane = lane;
+                    break;
+                }
+            }
+            if (entryLane != null) break;
+        }
+        if (entryLane == null) {
+            for (Road road : scene.getRoads()) {
+                for (Lane lane : road.getLanes()) {
+                    if (laneEndsAtIntersection(lane, inter) && lane.getLaneIndex() < 3) {
+                        entryLane = lane;
+                        break;
+                    }
+                }
+                if (entryLane != null) break;
+            }
+        }
+        if (entryLane == null) return;
+
+        // Choose exit lane (motorized lanes 0, 1, 2)
+        Lane exitLane = null;
+        for (Road road : scene.getRoads()) {
+            for (Lane lane : road.getLanes()) {
+                if (laneStartsAtIntersection(lane, inter) && !isUTurn(entryLane, lane) && lane.getLaneIndex() == 0) {
+                    exitLane = lane;
+                    break;
+                }
+            }
+            if (exitLane != null) break;
+        }
+        if (exitLane == null) {
+            for (Road road : scene.getRoads()) {
+                for (Lane lane : road.getLanes()) {
+                    if (laneStartsAtIntersection(lane, inter) && !isUTurn(entryLane, lane) && lane.getLaneIndex() < 3) {
+                        exitLane = lane;
+                        break;
+                    }
+                }
+                if (exitLane != null) break;
+            }
+        }
+        if (exitLane == null) exitLane = entryLane; // fallback
+
+        // Spawn police car far away (10m from the start of the lane)
+        double spawnOffset = 10.0;
+        double[] pos = entryLane.pointAt(spawnOffset);
+        
+        // Remove any vehicles very close to spawn point to avoid overlap
+        List<Vehicle> closeVehicles = new ArrayList<>();
+        for (Vehicle v : scene.getVehicles()) {
+            if (!(v instanceof PoliceCar) && Math.hypot(v.getX() - pos[0], v.getY() - pos[1]) < 22.0) {
+                closeVehicles.add(v);
+            }
+        }
+        for (Vehicle v : closeVehicles) {
+            routedIntersections.remove(v.getId());
+            scene.removeVehicle(v);
+        }
+        
+        PoliceCar pc = new PoliceCar(pos[0], pos[1], entryLane.getDirection(), inter);
+        pc.setCurrentLane(entryLane);
+        entryLane.addVehicle(pc);
+        scene.addVehicle(pc);
+
+        // Route it through the intersection
+        Vehicle.TurnIntent intent = calculateActualTurnIntent(inter, entryLane, exitLane);
+        pc.setUpcomingExit(inter, exitLane, intent);
+        
+        List<double[]> path = inter instanceof FiveWayIntersection
+                ? buildRoundaboutPath(pc, inter, exitLane)
+                : buildTurnPath(pc, inter, exitLane);
+        pc.beginPath(exitLane, path);
+        
+        routedIntersections.put(pc.getId(), inter);
+    }
+
+    private Vehicle getFrontVehicleFiltered(Vehicle self, Lane lane) {
+        if (lane == null) return null;
+        Vehicle nearest = null; double minDist = Double.MAX_VALUE;
+        for (Vehicle o : lane.getVehicles()) {
+            if (o == self) continue;
+            if (o.isOnPriorityShoulder() != self.isOnPriorityShoulder()) continue;
+            if (shouldIgnoreCollision(self, o)) continue;
+            double relX = o.getX() - self.getX(), relY = o.getY() - self.getY();
+            double dot  = relX * self.getMoveX() + relY * self.getMoveY();
+            if (dot > 0) {
+                double d = Math.sqrt(relX*relX + relY*relY);
+                if (d < minDist) { minDist = d; nearest = o; }
+            }
+        }
+        return nearest;
+    }
+
+    private boolean isWaitingAtRedLight(Vehicle v) {
+        if (v.hasPassedStopLine()) return false;
+        if (v.isStoppedForRed()) return true;
+        Lane lane = v.getCurrentLane();
+        if (lane != null) {
+            TrafficLight tl = lane.getTrafficLight();
+            if (tl != null && (tl.isRed() || tl.isYellow())) {
+                double dist = lane.distanceToStopLine(v);
+                if (dist >= 0 && dist < 30.0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isStoppedForRedOrQueue(Vehicle v) {
+        return isStoppedForRedOrQueueHelper(v, 0);
+    }
+
+    private boolean isStoppedForRedOrQueueHelper(Vehicle v, int depth) {
+        if (v == null || depth > 20) return false;
+        if (isWaitingAtRedLight(v)) return true;
+        
+        Lane lane = v.getCurrentLane();
+        if (lane != null) {
+            Vehicle front = lane.getFrontVehicle(v);
+            if (front != null && front.getSpeed() < 0.1) {
+                return isStoppedForRedOrQueueHelper(front, depth + 1);
+            }
+        }
+        return false;
+    }
+
+    private Vehicle findVehicleById(String id) {
+        for (Vehicle v : scene.getVehicles()) {
+            if (v.getId().equals(id)) return v;
+        }
+        return null;
     }
 
     public SimScene getScene() {

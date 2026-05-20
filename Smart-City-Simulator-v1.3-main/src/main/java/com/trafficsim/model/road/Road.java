@@ -45,16 +45,18 @@ public class Road {
 
     private void addLanePair(double sx, double sy, double ex, double ey,
                              double rx, double ry, Direction dir) {
-        double lw = SimConfig.LANE_WIDTH;
-        lanes.add(new Lane(sx + rx * lw * 0.5, sy + ry * lw * 0.5,
-                           ex + rx * lw * 0.5, ey + ry * lw * 0.5,
-                           lw, dir, 0));
-        lanes.add(new Lane(sx + rx * lw * 1.5, sy + ry * lw * 1.5,
-                           ex + rx * lw * 1.5, ey + ry * lw * 1.5,
-                           lw, dir, 1));
-        lanes.add(new Lane(sx + rx * lw * 2.5, sy + ry * lw * 2.5,
-                           ex + rx * lw * 2.5, ey + ry * lw * 2.5,
-                           lw, dir, 2));
+        lanes.add(new Lane(sx + rx * 9.0, sy + ry * 9.0,
+                           ex + rx * 9.0, ey + ry * 9.0,
+                           18.0, dir, 0));
+        lanes.add(new Lane(sx + rx * 27.0, sy + ry * 27.0,
+                           ex + rx * 27.0, ey + ry * 27.0,
+                           18.0, dir, 1));
+        lanes.add(new Lane(sx + rx * 45.0, sy + ry * 45.0,
+                           ex + rx * 45.0, ey + ry * 45.0,
+                           18.0, dir, 2));
+        lanes.add(new Lane(sx + rx * 59.0, sy + ry * 59.0,
+                           ex + rx * 59.0, ey + ry * 59.0,
+                           10.0, dir, 3));
     }
 
     public List<Lane> getLanesForDirection(Direction dir) {
@@ -80,5 +82,5 @@ public class Road {
     public double getDirY()      { return dirY; }
     public double getRightX()    { return rightX; }
     public double getRightY()    { return rightY; }
-    public double getHalfWidth() { return SimConfig.LANE_WIDTH * 3; }
+    public double getHalfWidth() { return SimConfig.ROAD_HALF_WIDTH; }
 }

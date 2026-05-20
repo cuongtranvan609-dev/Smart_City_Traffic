@@ -9,7 +9,7 @@ import javafx.scene.paint.Color;
 public class Bicycle extends Vehicle {
     public Bicycle(double x, double y, Direction dir) { this(x, y, dir, new CautiousDriver()); }
     public Bicycle(double x, double y, Direction dir, DrivingBehavior b) {
-        super(x, y, dir, 25, 9, 4, b); preferredLaneIndex = 1;
+        super(x, y, dir, 25, 9, 4, b); preferredLaneIndex = 3;
     }
     @Override public String getShortName()  { return "Bike"; }
     @Override public String getColor()      { return "#A5D6A7"; }

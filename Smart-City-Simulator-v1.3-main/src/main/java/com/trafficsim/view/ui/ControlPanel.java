@@ -8,6 +8,7 @@ import com.trafficsim.service.SceneBuilder;
 import com.trafficsim.service.SoundService;
 import com.trafficsim.view.renderer.BasicRenderer;
 import com.trafficsim.view.renderer.GraphicRenderer;
+import com.trafficsim.view.renderer.Renderer3D;
 import javafx.animation.Timeline;
 import javafx.animation.KeyFrame;
 import javafx.geometry.Insets;
@@ -99,6 +100,9 @@ public class ControlPanel extends ScrollPane {
             new HBox(6, rbs[2], rbs[3]));
     }
 
+    private CheckBox toggleSpawn;
+    private CheckBox autoPolice;
+
     // ===== DENSITY =====
     private VBox buildDensitySelector() {
         ToggleGroup tg = new ToggleGroup();
@@ -108,14 +112,26 @@ public class ControlPanel extends ScrollPane {
         mid .setOnAction(e -> { if(controller!=null) controller.setTrafficDensity(TrafficController.TrafficDensity.MEDIUM); });
         high.setOnAction(e -> { if(controller!=null) controller.setTrafficDensity(TrafficController.TrafficDensity.HIGH); });
         
-        CheckBox toggleSpawn = new CheckBox("Dừng Spawn Xe");
+        toggleSpawn = new CheckBox("Dừng Spawn Xe");
         toggleSpawn.setTextFill(Color.LIGHTGRAY);
         toggleSpawn.setOnAction(e -> { if(controller!=null) controller.setSpawnEnabled(!toggleSpawn.isSelected()); });
         
         Button clearBtn = btn("🗑 Xóa tất cả xe");
         clearBtn.setOnAction(e -> { if(controller!=null) controller.clearAllVehicles(); });
         
-        return new VBox(8, new HBox(6, low, mid, high), new HBox(12, toggleSpawn, clearBtn));
+        autoPolice = new CheckBox("Cảnh sát tự động");
+        autoPolice.setTextFill(Color.LIGHTGRAY);
+        autoPolice.setSelected(true);
+        autoPolice.setOnAction(e -> { if(controller!=null) controller.setAutoPoliceEnabled(autoPolice.isSelected()); });
+        
+        Button policeBtn = btn("🚨 Điều tiết Cảnh sát");
+        policeBtn.setOnAction(e -> { if(controller!=null) controller.triggerManualPolice(); });
+        
+        return new VBox(8, 
+            new HBox(6, low, mid, high), 
+            new HBox(12, toggleSpawn, clearBtn),
+            new HBox(12, autoPolice, policeBtn)
+        );
     }
 
     // ===== CONTROL MODE =====
@@ -163,11 +179,12 @@ public class ControlPanel extends ScrollPane {
     // ===== RENDER MODE =====
     private HBox buildRenderMode() {
         ToggleGroup tg = new ToggleGroup();
-        RadioButton basic=styledRadio("Basic",tg), gfx=styledRadio("Đồ họa",tg);
+        RadioButton basic=styledRadio("Basic",tg), gfx=styledRadio("Đồ họa",tg), r3d=styledRadio("3D",tg);
         basic.setSelected(true);
         basic.setOnAction(e -> simCanvas.setRenderer(new BasicRenderer()));
         gfx  .setOnAction(e -> simCanvas.setRenderer(new GraphicRenderer()));
-        return new HBox(6, basic, gfx);
+        r3d  .setOnAction(e -> simCanvas.setRenderer(new Renderer3D()));
+        return new HBox(6, basic, gfx, r3d);
     }
 
     // ===== LIGHT TYPE =====
@@ -242,6 +259,12 @@ public class ControlPanel extends ScrollPane {
             case NETWORK   -> SceneBuilder.buildNetwork();
         };
         controller = new TrafficController(scene, soundService);
+        if (toggleSpawn != null) {
+            controller.setSpawnEnabled(!toggleSpawn.isSelected());
+        }
+        if (autoPolice != null) {
+            controller.setAutoPoliceEnabled(autoPolice.isSelected());
+        }
         simCanvas.setController(controller);
         simCanvas.resetZoom();
         // Refresh speed panel with new scene

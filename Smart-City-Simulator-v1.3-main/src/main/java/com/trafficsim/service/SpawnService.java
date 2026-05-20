@@ -16,36 +16,43 @@ public class SpawnService {
     public SpawnService(SimScene scene) { this.scene = scene; }
 
     public void spawnVehicle() {
-        // Prefer outer lanes for motorbikes/bicycles, inner for cars
-        List<Lane> allLanes = new ArrayList<>();
-        for (Road road : scene.getRoads()) {
-            for (Lane lane : road.getLanes()) {
-                if (isClearSpawnStart(lane)) allLanes.add(lane);
-            }
-        }
-        if (allLanes.isEmpty()) return;
-
-        Lane lane = allLanes.get(rng.nextInt(allLanes.size()));
-        double x = lane.getStartX(), y = lane.getStartY();
-
         spawnCount++;
         boolean isPriority = (spawnCount % PRIORITY_RATIO == 0);
 
-        // Pick vehicle type matching lane
+        List<Lane> eligibleLanes = new ArrayList<>();
+        for (Road road : scene.getRoads()) {
+            for (Lane lane : road.getLanes()) {
+                if (isClearSpawnStart(lane)) {
+                    eligibleLanes.add(lane);
+                }
+            }
+        }
+
+        if (eligibleLanes.isEmpty()) return;
+
+        Lane lane = eligibleLanes.get(rng.nextInt(eligibleLanes.size()));
+        double x = lane.getStartX(), y = lane.getStartY();
+
+        // Create vehicle based on lane index:
         Vehicle v;
-        if (isPriority) {
-            var type = rng.nextBoolean() ? VehicleFactory.Type.AMBULANCE : VehicleFactory.Type.FIRE_TRUCK;
-            v = VehicleFactory.create(type, x, y, lane.getDirection());
-        } else if (lane.getLaneIndex() >= 1) {
-            // Outer lanes (1 and 2): motorbike or bicycle
-            v = rng.nextInt(3) == 0
-                ? VehicleFactory.create(VehicleFactory.Type.BICYCLE, x, y, lane.getDirection())
-                : VehicleFactory.create(VehicleFactory.Type.MOTORBIKE, x, y, lane.getDirection());
+        if (lane.getLaneIndex() == 3) {
+            // Lane 3 is the brown lane: only bicycles allowed!
+            v = VehicleFactory.create(VehicleFactory.Type.BICYCLE, x, y, lane.getDirection());
         } else {
-            // Inner lane: car or bus (occasionally)
-            v = rng.nextInt(6) == 0
-                ? VehicleFactory.create(VehicleFactory.Type.BUS, x, y, lane.getDirection())
-                : VehicleFactory.create(VehicleFactory.Type.CAR, x, y, lane.getDirection());
+            // Lanes 0, 1, 2: motorized vehicles
+            if (isPriority) {
+                var type = rng.nextBoolean() ? VehicleFactory.Type.AMBULANCE : VehicleFactory.Type.FIRE_TRUCK;
+                v = VehicleFactory.create(type, x, y, lane.getDirection());
+            } else {
+                int r = rng.nextInt(10);
+                if (r < 5) {
+                    v = VehicleFactory.create(VehicleFactory.Type.CAR, x, y, lane.getDirection());
+                } else if (r < 7) {
+                    v = VehicleFactory.create(VehicleFactory.Type.MOTORBIKE, x, y, lane.getDirection());
+                } else {
+                    v = VehicleFactory.create(VehicleFactory.Type.BUS, x, y, lane.getDirection());
+                }
+            }
         }
 
         if (!lane.hasSpaceNear(x, y, v.getLength() + 10)) return;

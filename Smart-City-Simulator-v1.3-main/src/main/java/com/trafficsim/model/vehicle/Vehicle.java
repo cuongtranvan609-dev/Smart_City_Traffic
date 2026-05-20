@@ -63,6 +63,12 @@ public abstract class Vehicle {
     private double priorityYieldOffset = 0;
     private double priorityYieldTargetOffset = 0;
 
+    // Pre-lane-change signaling state
+    private Lane pendingLaneChangeTarget = null;
+    private double laneChangePrepTimer = 0.0;
+    private boolean isOvertakePrep = false;
+    private boolean isEmergencyOvertakePrep = false;
+
     // Curved routing state used inside intersections and roundabouts.
     private boolean followingPath = false;
     private Lane pathExitLane = null;
@@ -97,6 +103,37 @@ public abstract class Vehicle {
 
     public void update(double dt, Vehicle frontVehicle) {
         if (currentLane == null) return;
+
+        if (laneChangePrepTimer > 0 && pendingLaneChangeTarget != null) {
+            laneChangePrepTimer -= dt;
+            if (laneChangePrepTimer <= 0) {
+                Lane target = pendingLaneChangeTarget;
+                pendingLaneChangeTarget = null;
+                Lane original = currentLane;
+                double reqGap = isOvertakePrep ? (length + 16) : (length + 20);
+                if (original != null && changeToLane(target, reqGap)) {
+                    if (isOvertakePrep) {
+                        overtakeTargetLane = original;
+                        overtaking = true;
+                        overtakeTimer = isEmergencyOvertakePrep ? 3.0 : OVERTAKE_DURATION;
+                        wrongWayOvertaking = isEmergencyOvertakePrep;
+                        if (isEmergencyOvertakePrep) {
+                            wrongWayDirX = getMoveX();
+                            wrongWayDirY = getMoveY();
+                            wrongWayAngleDeg = getHeadingAngleDeg();
+                        }
+                    } else {
+                        laneChangeSignalTimer = 2.0;
+                    }
+                } else {
+                    stopSignal();
+                    if (isEmergencyOvertakePrep) stopHonk();
+                }
+                isOvertakePrep = false;
+                isEmergencyOvertakePrep = false;
+            }
+        }
+
         updatePriorityYieldOffset(dt);
         updateLaneChangeOffset(dt);
 
@@ -197,6 +234,19 @@ public abstract class Vehicle {
         x += getMoveX() * move;
         y += getMoveY() * move;
 
+        if (frontVehicle != null) {
+            double minAllowedDist = (length + frontVehicle.getLength()) * 0.5 + 4.0;
+            double dx = frontVehicle.getX() - x;
+            double dy = frontVehicle.getY() - y;
+            double dist = Math.hypot(dx, dy);
+            if (dist < minAllowedDist && dist > 0.001) {
+                double overlap = minAllowedDist - dist;
+                x -= getMoveX() * overlap;
+                y -= getMoveY() * overlap;
+                speed = 0;
+            }
+        }
+
         if (!stopAtLine && !passedStopLine && distanceToStopLine() - length * 0.5 <= 0) {
             passedStopLine = true;
             stoppedForRed = false;
@@ -225,23 +275,34 @@ public abstract class Vehicle {
 
     /** Try to change to sibling lane for overtaking. Returns true if succeeded. */
     public boolean tryOvertake() {
-        if (overtaking || followingPath || currentLane == null) return false;
+        if (overtaking || followingPath || currentLane == null || laneChangePrepTimer > 0 || pendingLaneChangeTarget != null) return false;
         Lane left = currentLane.getLeftSibling();
         Lane right = currentLane.getRightSibling();
-        Lane original = currentLane;
         
-        if (left != null && changeToLane(left, length + 16)) {
-            overtakeTargetLane = original;
-            overtaking = true;
-            overtakeTimer = OVERTAKE_DURATION;
+        // Exclude lane 3 for civilian vehicles
+        if (right != null && (!isPriorityVehicle() && right.getLaneIndex() == 3)) {
+            right = null;
+        }
+        // Bicycles stay on lane 3 only
+        if (this instanceof com.trafficsim.model.vehicle.Bicycle) {
+            left = null;
+            right = null;
+        }
+
+        if (left != null && left.hasSpaceNear(x, y, length + 16)) {
+            pendingLaneChangeTarget = left;
+            laneChangePrepTimer = 1.0;
+            isOvertakePrep = true;
+            isEmergencyOvertakePrep = false;
             setSignalLeft(true);
             return true;
         }
         
-        if (right != null && changeToLane(right, length + 16)) {
-            overtakeTargetLane = original;
-            overtaking = true;
-            overtakeTimer = OVERTAKE_DURATION;
+        if (right != null && right.hasSpaceNear(x, y, length + 16)) {
+            pendingLaneChangeTarget = right;
+            laneChangePrepTimer = 1.0;
+            isOvertakePrep = true;
+            isEmergencyOvertakePrep = false;
             setSignalRight(true);
             return true;
         }
@@ -250,11 +311,19 @@ public abstract class Vehicle {
     }
 
     public boolean performSmoothLaneChange(Lane target) {
-        if (target == null || currentLane == null) return false;
-        boolean movingLeft = target.getLaneIndex() < currentLane.getLaneIndex();
+        if (target == null || currentLane == null || laneChangePrepTimer > 0 || pendingLaneChangeTarget != null || overtaking || followingPath) return false;
         
-        if (changeToLane(target, length + 20)) {
-            laneChangeSignalTimer = 2.0;
+        // Check bicycle lane constraints
+        boolean isBicycle = this instanceof com.trafficsim.model.vehicle.Bicycle;
+        boolean targetIsBicycleLane = target.getLaneIndex() == 3;
+        if (isBicycle != targetIsBicycleLane) return false;
+
+        boolean movingLeft = target.getLaneIndex() < currentLane.getLaneIndex();
+        if (target.hasSpaceNear(x, y, length + 20)) {
+            pendingLaneChangeTarget = target;
+            laneChangePrepTimer = 1.0;
+            isOvertakePrep = false;
+            isEmergencyOvertakePrep = false;
             if (movingLeft) setSignalLeft(true);
             else setSignalRight(true);
             return true;
@@ -264,18 +333,13 @@ public abstract class Vehicle {
 
     /** Priority vehicles can use opposite lane to overtake. */
     public boolean tryEmergencyOvertake() {
-        if (!isPriorityVehicle() || followingPath || currentLane == null) return false;
+        if (!isPriorityVehicle() || followingPath || currentLane == null || laneChangePrepTimer > 0 || pendingLaneChangeTarget != null || overtaking) return false;
         Lane opp = currentLane.getOppositeLane();
-        if (opp != null) {
-            Lane original = currentLane;
-            wrongWayDirX = getMoveX();
-            wrongWayDirY = getMoveY();
-            wrongWayAngleDeg = getHeadingAngleDeg();
-            if (!changeToLane(opp, length + 20)) return false;
-            overtakeTargetLane = original; // remember to return
-            wrongWayOvertaking = true;
-            overtaking = true;
-            overtakeTimer = 3.0;
+        if (opp != null && opp.hasSpaceNear(x, y, length + 20)) {
+            pendingLaneChangeTarget = opp;
+            laneChangePrepTimer = 1.0;
+            isOvertakePrep = true;
+            isEmergencyOvertakePrep = true;
             setSignalLeft(true); honk();
             return true;
         }
@@ -367,6 +431,20 @@ public abstract class Vehicle {
 
         pathProgress = Math.min(pathLength, pathProgress + speed * dt);
         setPathPosition(pathProgress);
+
+        if (frontVehicle != null) {
+            double minAllowedDist = (length + frontVehicle.getLength()) * 0.5 + 4.0;
+            double dx = frontVehicle.getX() - x;
+            double dy = frontVehicle.getY() - y;
+            double dist = Math.hypot(dx, dy);
+            if (dist < minAllowedDist && dist > 0.001) {
+                double overlap = minAllowedDist - dist;
+                pathProgress = Math.max(0, pathProgress - overlap);
+                setPathPosition(pathProgress);
+                speed = 0;
+            }
+        }
+
         smoothPathHeading(dt);
         if (pathProgress >= pathLength - 0.001) finishPath();
     }
@@ -460,6 +538,12 @@ public abstract class Vehicle {
 
     public boolean changeToLane(Lane targetLane, double minGap) {
         if (followingPath || currentLane == null || targetLane == null) return false;
+        
+        // Bicycle lane safety constraint
+        boolean isBicycle = this instanceof com.trafficsim.model.vehicle.Bicycle;
+        boolean targetIsBicycleLane = targetLane.getLaneIndex() == 3;
+        if (isBicycle != targetIsBicycleLane) return false;
+
         double s = targetLane.projectDistance(x, y);
         double[] p = targetLane.pointAt(s);
         if (!targetLane.hasSpaceNear(p[0], p[1], minGap)) return false;

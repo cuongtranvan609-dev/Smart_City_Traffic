@@ -38,12 +38,12 @@ public class ThreeWayIntersection extends Intersection {
 
     private void buildLights() {
         double r = getRadius();
-        // Light for NORTH arm: vehicles moving SOUTH toward intersection
-        TrafficLight n = new TrafficLight(cx, cy - r, Direction.SOUTH, TrafficLight.Phase.GREEN);
-        // Light for EAST arm: vehicles moving WEST
-        TrafficLight e = new TrafficLight(cx + r, cy, Direction.WEST, TrafficLight.Phase.RED);
-        // Light for WEST arm: vehicles moving EAST
-        TrafficLight w = new TrafficLight(cx - r, cy, Direction.EAST, TrafficLight.Phase.RED);
+        // Light for NORTH arm: vehicles moving SOUTH toward intersection, placed on right curb (West side)
+        TrafficLight n = new TrafficLight(cx - 72, cy - (r + 27), Direction.SOUTH, TrafficLight.Phase.GREEN);
+        // Light for EAST arm: vehicles moving WEST, placed on right curb (North side)
+        TrafficLight e = new TrafficLight(cx + (r + 27), cy - 72, Direction.WEST, TrafficLight.Phase.RED);
+        // Light for WEST arm: vehicles moving EAST, placed on right curb (South side)
+        TrafficLight w = new TrafficLight(cx - (r + 27), cy + 72, Direction.EAST, TrafficLight.Phase.RED);
 
         n.setDisplayType(TrafficLight.DisplayType.LATE_COUNTDOWN);
         e.setDisplayType(TrafficLight.DisplayType.ALWAYS_COUNTDOWN);

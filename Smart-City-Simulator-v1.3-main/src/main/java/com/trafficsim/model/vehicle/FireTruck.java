@@ -11,7 +11,7 @@ public class FireTruck extends Vehicle {
 
     public FireTruck(double x, double y, Direction dir) {
         super(x, y, dir, 100, 28, 12, new EmergencyDriver());
-        this.preferredLaneIndex = 2; // Emergency lane
+        this.preferredLaneIndex = 0;
         honk();
     }
     @Override public boolean isPriorityVehicle() { return true; }

@@ -6,24 +6,36 @@ import com.trafficsim.model.TrafficLight;
 import java.util.*;
 
 /**
- * True 5-way star intersection: 5 arms at 72° apart.
- * A vehicle entering from one arm exits through one of the OTHER 4 arms randomly.
- * Arms are indexed 0-4; each arm has both inbound and outbound lanes.
+ * Roundabout intersection supporting both 4-way (90 deg grid) and 5-way (star) modes.
  */
 public class FiveWayIntersection extends Intersection {
-    /** Arm angles in degrees (measured from East=0, CCW) */
-    private static final double[] ARM_ANGLES = {90, 162, 234, 306, 18};
-
-    // We map each arm to a Direction for traffic light assignment
-    private static final Direction[] ARM_DIRS = {
-        Direction.NORTH, Direction.WEST, Direction.SOUTH, Direction.EAST, Direction.EAST
-    };
+    private final boolean isFourWayRoundabout;
+    private final double[] armAngles;
+    private final Direction[] armDirs;
+    private final int numArms;
+    private final int totalPhases;
 
     private double phaseTimer = 0;
-    private int currentPhase = 0; // 0 to 9
+    private int currentPhase = 0; // 0 to (totalPhases - 1)
 
     public FiveWayIntersection(double cx, double cy) {
+        this(cx, cy, false);
+    }
+
+    public FiveWayIntersection(double cx, double cy, boolean isFourWayRoundabout) {
         super(cx, cy);
+        this.isFourWayRoundabout = isFourWayRoundabout;
+        if (isFourWayRoundabout) {
+            this.armAngles = new double[]{90, 180, 270, 0};
+            this.armDirs = new Direction[]{Direction.NORTH, Direction.WEST, Direction.SOUTH, Direction.EAST};
+            this.numArms = 4;
+            this.totalPhases = 8;
+        } else {
+            this.armAngles = new double[]{90, 162, 234, 306, 18};
+            this.armDirs = new Direction[]{Direction.NORTH, Direction.WEST, Direction.SOUTH, Direction.EAST, Direction.EAST};
+            this.numArms = 5;
+            this.totalPhases = 10;
+        }
         buildLights();
         trafficLights.forEach(tl -> tl.setAutoMode(false));
         applyPhaseStates();
@@ -31,11 +43,13 @@ public class FiveWayIntersection extends Intersection {
 
     private void buildLights() {
         double r = getRadius();
-        for (int i = 0; i < 5; i++) {
-            double rad = Math.toRadians(ARM_ANGLES[i]);
-            double tlX = cx + r * Math.cos(rad);
-            double tlY = cy - r * Math.sin(rad); // screen Y flipped
-            TrafficLight tl = new TrafficLight(tlX, tlY, ARM_DIRS[i], TrafficLight.Phase.RED);
+        for (int i = 0; i < numArms; i++) {
+            double rad = Math.toRadians(armAngles[i]);
+            // Position on right curb of incoming arm, aligned with stop line at r + 27
+            double tlX = cx + (r + 27) * Math.cos(rad) - 72 * Math.sin(rad);
+            double tlY = cy - (r + 27) * Math.sin(rad) - 72 * Math.cos(rad);
+            TrafficLight tl = new TrafficLight(tlX, tlY, armDirs[i], TrafficLight.Phase.RED);
+            tl.setAngleDeg(armAngles[i]); // Set custom angle matching the arm angle
             tl.setDisplayType(TrafficLight.DisplayType.LATE_COUNTDOWN);
             trafficLights.add(tl);
         }
@@ -47,7 +61,7 @@ public class FiveWayIntersection extends Intersection {
         double duration = (currentPhase % 2 == 0) ? SimConfig.GREEN_DURATION : SimConfig.YELLOW_DURATION;
         if (phaseTimer >= duration) {
             phaseTimer = 0;
-            currentPhase = (currentPhase + 1) % 10;
+            currentPhase = (currentPhase + 1) % totalPhases;
         }
         applyPhaseStates();
     }
@@ -56,7 +70,7 @@ public class FiveWayIntersection extends Intersection {
         int activeArm = currentPhase / 2;
         boolean isYellow = (currentPhase % 2 != 0);
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < numArms; i++) {
             if (i >= trafficLights.size()) continue;
             TrafficLight tl = trafficLights.get(i);
             if (i == activeArm) {
@@ -91,7 +105,7 @@ public class FiveWayIntersection extends Intersection {
             } else {
                 totalTime += (state % 2 == 0) ? SimConfig.GREEN_DURATION : SimConfig.YELLOW_DURATION;
             }
-            state = (state + 1) % 10;
+            state = (state + 1) % totalPhases;
         }
         return totalTime;
     }
@@ -99,24 +113,22 @@ public class FiveWayIntersection extends Intersection {
     @Override
     public void manualAdvance() {
         phaseTimer = 0;
-        currentPhase = (currentPhase + 1) % 10;
+        currentPhase = (currentPhase + 1) % totalPhases;
         applyPhaseStates();
     }
 
     /** Returns the world-space endpoint of arm i at given distance from center. */
     public double[] getArmEndPoint(int armIndex, double length) {
-        double rad = Math.toRadians(ARM_ANGLES[armIndex]);
+        double rad = Math.toRadians(armAngles[armIndex]);
         return new double[]{ cx + length * Math.cos(rad), cy - length * Math.sin(rad) };
     }
 
     /** Returns arm angle degrees for arm i */
-    public double getArmAngle(int armIndex) { return ARM_ANGLES[armIndex]; }
+    public double getArmAngle(int armIndex) { return armAngles[armIndex]; }
 
-    /**
-     * Given entry direction, return a random one of the OTHER 4 arms' directions.
-     * Because the 5 arms don't map cleanly to 4 cardinal directions, we assign
-     * each arm an angle and pick a random different arm.
-     */
+    public int getNumArms() { return numArms; }
+    public boolean isFourWayRoundabout() { return isFourWayRoundabout; }
+
     @Override
     public Direction randomExitDirection(Direction entryDir, Random rng) {
         Direction[] choices = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
@@ -131,6 +143,6 @@ public class FiveWayIntersection extends Intersection {
         return EnumSet.allOf(Direction.class);
     }
     @Override public double getRadius()   { return 110; }
-    @Override public String getTypeName() { return "Vòng Xuyến"; }
+    @Override public String getTypeName() { return isFourWayRoundabout ? "Vòng Xuyến 4 Ngả" : "Vòng Xuyến 5 Ngả"; }
     @Override public Type   getType()     { return Type.FIVE_WAY; }
 }

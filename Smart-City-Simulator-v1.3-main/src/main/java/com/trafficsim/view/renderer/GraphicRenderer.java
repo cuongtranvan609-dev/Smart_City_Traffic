@@ -202,7 +202,7 @@ public class GraphicRenderer implements SceneRenderer {
 
     private void drawRoad(GraphicsContext gc, Road road, SimScene scene) {
         double lw = SimConfig.LANE_WIDTH;
-        double fullW = lw * 6; // 3 lanes per direction
+        double fullW = lw * 8; // 4 lanes per direction
         
         double dx = road.getX2() - road.getX1();
         double dy = road.getY2() - road.getY1();
@@ -237,23 +237,34 @@ public class GraphicRenderer implements SceneRenderer {
         gc.setLineWidth(fullW);
         gc.strokeLine(lx1, ly1, lx2, ly2);
 
+        // Brown-tinted bicycle lane background
+        gc.setStroke(Color.rgb(139, 90, 43, 0.28));
+        gc.setLineWidth(10.0);
+        gc.strokeLine(lx1 + px * 59.0, ly1 + py * 59.0, lx2 + px * 59.0, ly2 + py * 59.0);
+        gc.strokeLine(lx1 - px * 59.0, ly1 - py * 59.0, lx2 - px * 59.0, ly2 - py * 59.0);
+
         // Yellow double center line
         gc.setStroke(Color.rgb(240, 200, 30, 0.9)); 
         gc.setLineWidth(2.0); 
         gc.setLineDashes(null);
         gc.strokeLine(lx1, ly1, lx2, ly2);
 
-        // White dashed lane dividers
+        // White dashed lane dividers (lane 0-1 and 1-2)
         gc.setStroke(Color.rgb(230, 230, 230, 0.7)); 
         gc.setLineWidth(1.2); 
         gc.setLineDashes(10, 8);
-        // Inner divider
-        gc.strokeLine(lx1 + px * lw, ly1 + py * lw, lx2 + px * lw, ly2 + py * lw);
-        gc.strokeLine(lx1 - px * lw, ly1 - py * lw, lx2 - px * lw, ly2 - py * lw);
-        // Outer divider
-        gc.strokeLine(lx1 + px * lw * 2, ly1 + py * lw * 2, lx2 + px * lw * 2, ly2 + py * lw * 2);
-        gc.strokeLine(lx1 - px * lw * 2, ly1 - py * lw * 2, lx2 - px * lw * 2, ly2 - py * lw * 2);
+        // Divider 1
+        gc.strokeLine(lx1 + px * 18.0, ly1 + py * 18.0, lx2 + px * 18.0, ly2 + py * 18.0);
+        gc.strokeLine(lx1 - px * 18.0, ly1 - py * 18.0, lx2 - px * 18.0, ly2 - py * 18.0);
+        // Divider 2
+        gc.strokeLine(lx1 + px * 36.0, ly1 + py * 36.0, lx2 + px * 36.0, ly2 + py * 36.0);
+        gc.strokeLine(lx1 - px * 36.0, ly1 - py * 36.0, lx2 - px * 36.0, ly2 - py * 36.0);
+        
+        // Solid divider for bicycle lane (lane 2-3)
         gc.setLineDashes(null);
+        gc.setStroke(Color.rgb(255, 255, 255, 0.9));
+        gc.strokeLine(lx1 + px * 54.0, ly1 + py * 54.0, lx2 + px * 54.0, ly2 + py * 54.0);
+        gc.strokeLine(lx1 - px * 54.0, ly1 - py * 54.0, lx2 - px * 54.0, ly2 - py * 54.0);
 
     }
 
@@ -289,15 +300,15 @@ public class GraphicRenderer implements SceneRenderer {
             gc.setLineWidth(3);
             gc.strokeOval(inter.getCx() - r*0.25, inter.getCy() - r*0.25, r*0.5, r*0.5);
             
-            // Roundabout 3-lane dividers (dashed circles)
+            // Roundabout lane dividers (dashed/solid circles)
             gc.setStroke(Color.rgb(255, 255, 255, 0.6));
             gc.setLineWidth(1.5);
             gc.setLineDashes(10, 8);
             // Inner divider (between lane 0 and 1)
-            double rDiv1 = 72;
+            double rDiv1 = 74;
             gc.strokeOval(inter.getCx() - rDiv1, inter.getCy() - rDiv1, rDiv1 * 2, rDiv1 * 2);
-            // Outer divider (between lane 1 and 2)
-            double rDiv2 = 88;
+            // Middle divider (between lane 1 and 2)
+            double rDiv2 = 92;
             gc.strokeOval(inter.getCx() - rDiv2, inter.getCy() - rDiv2, rDiv2 * 2, rDiv2 * 2);
             gc.setLineDashes(null);
             
@@ -307,13 +318,6 @@ public class GraphicRenderer implements SceneRenderer {
             
             // Note: Dashed guide lines and extra markings are intentionally removed 
         } else {
-            // Note: Pedestrian crosswalks have been intentionally removed by user request
-            /*
-            for (Direction dir : inter.getArms()) {
-                drawCrosswalk(gc, inter, dir);
-            }
-            */
-            
             // Center directional chevrons
             gc.setStroke(Color.rgb(255, 215, 0, 0.85));
             gc.setLineWidth(2);
@@ -328,6 +332,19 @@ public class GraphicRenderer implements SceneRenderer {
             }
         }
 
+        // Draw pedestrian crosswalks on all road arms
+        if (inter.getType() != Intersection.Type.FIVE_WAY) {
+            for (Direction dir : inter.getArms()) {
+                BasicRenderer.drawBeautifulCrosswalk(gc, inter.getCx(), inter.getCy(), inter.getRadius(), dir.angleDeg);
+            }
+        } else {
+            // Roundabout intersection arms
+            com.trafficsim.model.intersection.FiveWayIntersection fwi = (com.trafficsim.model.intersection.FiveWayIntersection) inter;
+            for (int i = 0; i < fwi.getNumArms(); i++) {
+                BasicRenderer.drawBeautifulCrosswalk(gc, inter.getCx(), inter.getCy(), inter.getRadius(), 360.0 - fwi.getArmAngle(i));
+            }
+        }
+
         // Intersection text
         gc.setFill(Color.rgb(255, 255, 255, 0.6));
         gc.setFont(Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 12));
@@ -335,28 +352,6 @@ public class GraphicRenderer implements SceneRenderer {
         gc.fillText(inter.getTypeName(), inter.getCx(), inter.getCy() + 4);
     }
 
-    private void drawCrosswalk(GraphicsContext gc, Intersection inter, Direction dir) {
-        double r = inter.getRadius();
-        // Position at the edge of the intersection
-        double armX = inter.getCx() + dir.dx * (r - 10); 
-        double armY = inter.getCy() + dir.dy * (r - 10);
-
-        gc.save();
-        gc.translate(armX, armY);
-        gc.rotate(dir.angleDeg); 
-
-        gc.setStroke(Color.WHITE);
-        gc.setLineWidth(3.5);
-        
-        double roadWidth = SimConfig.LANE_WIDTH * 6; 
-        double stripeLen = 14;
-        double stripeSpace = 6.5;
-        
-        for (double y = -roadWidth/2 + 4; y <= roadWidth/2 - 4; y += stripeSpace) {
-            gc.strokeLine(-stripeLen/2, y, stripeLen/2, y);
-        }
-        gc.restore();
-    }
 
     private void drawTwoWheeler(GraphicsContext gc, Vehicle v, double vh, double vw) {
         gc.setFill(Color.rgb(30, 30, 30));
@@ -372,6 +367,39 @@ public class GraphicRenderer implements SceneRenderer {
         
         gc.setFill(v instanceof com.trafficsim.model.vehicle.Motorbike ? Color.rgb(200, 50, 50) : Color.rgb(50, 150, 200)); 
         gc.fillOval(-3, -vw/2 + 1, 7, vw - 2); 
+    }
+
+    private void drawPoliceCar(GraphicsContext gc, Vehicle v, double vh, double vw) {
+        // Police car body: Black front and rear, White middle (doors)
+        gc.setFill(Color.rgb(20, 20, 25)); // Dark black
+        gc.fillRoundRect(-vh/2, -vw/2, vh, vw, 4, 4);
+        
+        gc.setFill(Color.WHITE); // White center
+        gc.fillRect(-vh*0.18, -vw/2, vh*0.36, vw);
+        
+        // Windshield and windows
+        gc.setFill(Color.rgb(30, 30, 35));
+        gc.fillRect(-vh/2 + vh*0.65, -vw/2 + 2, vh*0.18, vw - 4); 
+        gc.fillRect(-vh/2 + vh*0.15, -vw/2 + 2, vh*0.12, vw - 4); 
+        
+        // Side mirrors / details
+        gc.setFill(Color.web(v.getColor()).brighter());
+        gc.fillRect(-vh*0.1, -vw/2 + 1, vh*0.2, 1);
+        gc.fillRect(-vh*0.1,  vw/2 - 2, vh*0.2, 1);
+        
+        // Headlights and tail lights
+        gc.setFill(Color.LIGHTYELLOW);
+        gc.fillOval(vh/2 - 2, -vw/2 + 1, 3, 3);
+        gc.fillOval(vh/2 - 2, vw/2 - 4, 3, 3);
+        gc.setFill(Color.RED);
+        gc.fillOval(-vh/2, -vw/2 + 1, 2, 3);
+        gc.fillOval(-vh/2, vw/2 - 4, 2, 3);
+        
+        // Flashing Light Bar (Red and Blue)
+        long time = System.currentTimeMillis();
+        boolean flash = (time % 200) < 100;
+        gc.setFill(flash ? Color.rgb(255, 30, 30) : Color.rgb(30, 80, 255));
+        gc.fillRoundRect(-2, -vw/2 + 2, 4, vw - 4, 1, 1);
     }
 
     private void drawCar(GraphicsContext gc, Vehicle v, double vh, double vw) {
@@ -499,7 +527,9 @@ public class GraphicRenderer implements SceneRenderer {
         gc.setFill(Color.rgb(0, 0, 0, 0.45));
         gc.fillRoundRect(-vh/2 + 2, -vw/2 + 3, vh, vw, 4, 4);
         
-        if (v instanceof com.trafficsim.model.vehicle.Motorbike || v instanceof com.trafficsim.model.vehicle.Bicycle) {
+        if (v instanceof com.trafficsim.model.vehicle.PoliceCar) {
+            drawPoliceCar(gc, v, vh, vw);
+        } else if (v instanceof com.trafficsim.model.vehicle.Motorbike || v instanceof com.trafficsim.model.vehicle.Bicycle) {
             drawTwoWheeler(gc, v, vh, vw);
         } else if (v instanceof com.trafficsim.model.vehicle.Ambulance) {
             drawAmbulance(gc, v, vh, vw);

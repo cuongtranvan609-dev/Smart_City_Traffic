@@ -118,7 +118,7 @@ public class Lane {
         Vehicle nearest = null; double minDist = Double.MAX_VALUE;
         for (Vehicle o : vehicles) {
             if (o == self) continue;
-            if (o.isOnPriorityShoulder()) continue;
+            if (o.isOnPriorityShoulder() != self.isOnPriorityShoulder()) continue;
             double relX = o.getX() - self.getX(), relY = o.getY() - self.getY();
             double dot  = relX * self.getMoveX() + relY * self.getMoveY();
             if (dot > 0) {

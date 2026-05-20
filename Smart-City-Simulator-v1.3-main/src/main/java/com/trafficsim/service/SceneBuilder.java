@@ -40,7 +40,7 @@ public class SceneBuilder {
     public static SimScene buildFiveWay() {
         SimScene s = new SimScene(SimScene.SceneType.FIVE_WAY);
         double cx = SimConfig.CANVAS_WIDTH / 2, cy = SimConfig.CANVAS_HEIGHT / 2;
-        FiveWayIntersection inter = new FiveWayIntersection(cx, cy);
+        FiveWayIntersection inter = new FiveWayIntersection(cx, cy, false);
         s.addIntersection(inter);
         double len = 280;
         for (int i = 0; i < 5; i++) {
@@ -63,41 +63,33 @@ public class SceneBuilder {
         double sy = SimConfig.NETWORK_SPACING_Y;
         double ox = 120, oy = 100;
 
-        // 10 node positions
+        // 9 node positions (pure 3x3 grid)
         double[][] n = {
             {ox,       oy},          // 0
             {ox+sx,    oy},          // 1
             {ox+sx*2,  oy},          // 2
             {ox,       oy+sy},       // 3
-            {ox+sx,    oy+sy},       // 4  ← FiveWay (center)
+            {ox+sx,    oy+sy},       // 4  ← FiveWay Roundabout (center)
             {ox+sx*2,  oy+sy},       // 5
             {ox,       oy+sy*2},     // 6
             {ox+sx,    oy+sy*2},     // 7
             {ox+sx*2,  oy+sy*2},     // 8
-            {ox+sx*1.5,oy+sy*0.55},  // 9  ← extra, connects to 1,2,5
         };
 
-        // Count how many roads each node has — determines intersection type
         // Connections: (a, b) means road between node a and node b
         int[][] edges = {
             {0,1},{1,2},{3,4},{4,5},{6,7},{7,8}, // horizontal main
             {0,3},{1,4},{2,5},{3,6},{4,7},{5,8}, // vertical main
-            {1,9},{9,2},{9,5},                   // extra node 9
         };
 
-        // Degree of each node (number of connections)
-        int[] degree = new int[10];
-        for (int[] e : edges) { degree[e[0]]++; degree[e[1]]++; }
-
-        // Build intersections based on degree
-        Intersection[] inters = new Intersection[10];
-        for (int i = 0; i < 10; i++) {
-            inters[i] = switch (degree[i]) {
-                case 5, 4 -> (i == 4) ? new FiveWayIntersection(n[i][0], n[i][1])
-                                      : new FourWayIntersection(n[i][0], n[i][1]);
-                case 3    -> new ThreeWayIntersection(n[i][0], n[i][1]);
-                default   -> new FourWayIntersection(n[i][0], n[i][1]);
-            };
+        // Build intersections
+        Intersection[] inters = new Intersection[9];
+        for (int i = 0; i < 9; i++) {
+            if (i == 4) {
+                inters[i] = new FiveWayIntersection(n[i][0], n[i][1], true); // true = 4-way roundabout
+            } else {
+                inters[i] = new FourWayIntersection(n[i][0], n[i][1]);
+            }
             s.addIntersection(inters[i]);
         }
 
@@ -107,9 +99,6 @@ public class SceneBuilder {
 
         // Perimeter stubs for spawning/exiting
         double stub = 90;
-        int[][] perimeter = {{0,0,-1,0},{0,1,0,-1},{1,1,0,-1},{2,1,0,-1},{2,2,1,0},{2,3,0,1},
-                             {0,3,0,1},{6,3,0,1},{6,6,-1,0},{7,6,0,1},{8,6,0,1},{8,2,1,0}};
-        // Simpler: just add stubs at border nodes
         addStub(s, n[0], -1, 0, stub); addStub(s, n[0], 0, -1, stub);
         addStub(s, n[1], 0, -1, stub);
         addStub(s, n[2], 1, 0, stub);  addStub(s, n[2], 0, -1, stub);
@@ -152,8 +141,8 @@ public class SceneBuilder {
                         // The longitudinal position is identical for sibling lanes, but the lateral
                         // offset must stay lane-specific so the renderer can draw one continuous
                         // white bar across all stopping lanes.
-                        double slx = lane.getEndX() - lane.getDirX() * r;
-                        double sly = lane.getEndY() - lane.getDirY() * r;
+                        double slx = lane.getEndX() - lane.getDirX() * (r + 27);
+                        double sly = lane.getEndY() - lane.getDirY() * (r + 27);
                         lane.setStopLine(slx, sly);
 
                         // Assign matching traffic light
@@ -201,6 +190,7 @@ public class SceneBuilder {
         Lane lane0 = findByIndex(lanes, 0);
         Lane lane1 = findByIndex(lanes, 1);
         Lane lane2 = findByIndex(lanes, 2);
+        Lane lane3 = findByIndex(lanes, 3);
         if (lane0 != null && lane1 != null) {
             lane0.setRightSibling(lane1);
             lane1.setLeftSibling(lane0);
@@ -208,6 +198,10 @@ public class SceneBuilder {
         if (lane1 != null && lane2 != null) {
             lane1.setRightSibling(lane2);
             lane2.setLeftSibling(lane1);
+        }
+        if (lane2 != null && lane3 != null) {
+            lane2.setRightSibling(lane3);
+            lane3.setLeftSibling(lane2);
         }
     }
 

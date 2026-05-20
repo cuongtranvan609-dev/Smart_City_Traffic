@@ -45,7 +45,7 @@ public class BasicRenderer implements SceneRenderer {
 
     static void drawRoad(GraphicsContext gc, Road road) {
         double lw = SimConfig.LANE_WIDTH;
-        double hw  = lw * 3; // half total width (3 lanes per direction)
+        double hw  = lw * 4; // half total width (4 lanes per direction)
         double fullW = hw * 2;
 
         double dx = road.getX2()-road.getX1(), dy = road.getY2()-road.getY1();
@@ -64,19 +64,25 @@ public class BasicRenderer implements SceneRenderer {
         gc.setStroke(CENTER_LINE); gc.setLineWidth(1.4); gc.setLineDashes(null);
         gc.strokeLine(road.getX1(), road.getY1(), road.getX2(), road.getY2());
 
-        // White dashed dividers between lanes within each direction
+        // White dashed dividers between lanes within each direction (lane 0-1 and 1-2)
         gc.setStroke(LANE_DASH); gc.setLineWidth(0.8); gc.setLineDashes(8,6);
-        // Inner lane dividers (offset 1 * lw)
-        gc.strokeLine(road.getX1() + px * lw, road.getY1() + py * lw,
-                      road.getX2() + px * lw, road.getY2() + py * lw);
-        gc.strokeLine(road.getX1() - px * lw, road.getY1() - py * lw,
-                      road.getX2() - px * lw, road.getY2() - py * lw);
-        // Outer lane dividers (offset 2 * lw)
-        gc.strokeLine(road.getX1() + px * lw * 2, road.getY1() + py * lw * 2,
-                      road.getX2() + px * lw * 2, road.getY2() + py * lw * 2);
-        gc.strokeLine(road.getX1() - px * lw * 2, road.getY1() - py * lw * 2,
-                      road.getX2() - px * lw * 2, road.getY2() - py * lw * 2);
+        // Divider 1 (offset 18.0)
+        gc.strokeLine(road.getX1() + px * 18.0, road.getY1() + py * 18.0,
+                      road.getX2() + px * 18.0, road.getY2() + py * 18.0);
+        gc.strokeLine(road.getX1() - px * 18.0, road.getY1() - py * 18.0,
+                      road.getX2() - px * 18.0, road.getY2() - py * 18.0);
+        // Divider 2 (offset 36.0)
+        gc.strokeLine(road.getX1() + px * 36.0, road.getY1() + py * 36.0,
+                      road.getX2() + px * 36.0, road.getY2() + py * 36.0);
+        gc.strokeLine(road.getX1() - px * 36.0, road.getY1() - py * 36.0,
+                      road.getX2() - px * 36.0, road.getY2() - py * 36.0);
+        
+        // Solid divider for bicycle lane (offset 54.0)
         gc.setLineDashes(null);
+        gc.strokeLine(road.getX1() + px * 54.0, road.getY1() + py * 54.0,
+                      road.getX2() + px * 54.0, road.getY2() + py * 54.0);
+        gc.strokeLine(road.getX1() - px * 54.0, road.getY1() - py * 54.0,
+                      road.getX2() - px * 54.0, road.getY2() - py * 54.0);
     }
 
     static void drawIntersection(GraphicsContext gc, Intersection inter) {
@@ -90,11 +96,22 @@ public class BasicRenderer implements SceneRenderer {
             gc.setStroke(LANE_DASH);
             gc.setLineWidth(1.2);
             gc.setLineDashes(8, 6);
-            gc.strokeOval(inter.getCx()-72, inter.getCy()-72, 72*2, 72*2);
-            gc.strokeOval(inter.getCx()-88, inter.getCy()-88, 88*2, 88*2);
+            gc.strokeOval(inter.getCx()-74, inter.getCy()-74, 74*2, 74*2);
+            gc.strokeOval(inter.getCx()-92, inter.getCy()-92, 92*2, 92*2);
             gc.setLineDashes(null);
+        }
+
+        // Draw pedestrian crosswalks on all road arms
+        if (inter.getType() != Intersection.Type.FIVE_WAY) {
+            for (Direction dir : inter.getArms()) {
+                drawBeautifulCrosswalk(gc, inter.getCx(), inter.getCy(), inter.getRadius(), dir.angleDeg);
+            }
         } else {
-            // Note: Pedestrian crosswalks have been intentionally removed by user request
+            // Roundabout intersection arms
+            com.trafficsim.model.intersection.FiveWayIntersection fwi = (com.trafficsim.model.intersection.FiveWayIntersection) inter;
+            for (int i = 0; i < fwi.getNumArms(); i++) {
+                drawBeautifulCrosswalk(gc, inter.getCx(), inter.getCy(), inter.getRadius(), 360.0 - fwi.getArmAngle(i));
+            }
         }
 
         // Label
@@ -104,25 +121,44 @@ public class BasicRenderer implements SceneRenderer {
         gc.fillText(inter.getTypeName(), inter.getCx(), inter.getCy()+3);
     }
 
-    private static void drawBasicCrosswalk(GraphicsContext gc, Intersection inter, Direction dir) {
-        double r = inter.getRadius();
-        double armX = inter.getCx() + dir.dx * (r - 4); 
-        double armY = inter.getCy() + dir.dy * (r - 4);
+    public static void drawBeautifulCrosswalk(GraphicsContext gc, double cx, double cy, double r, double screenAngleDeg) {
+        // Calculate the crosswalk center outside the intersection boundary
+        double rad = Math.toRadians(screenAngleDeg);
+        double armX = cx + Math.cos(rad) * (r + 15);
+        double armY = cy + Math.sin(rad) * (r + 15);
 
         gc.save();
         gc.translate(armX, armY);
-        gc.rotate(dir.angleDeg); 
+        gc.rotate(screenAngleDeg);
 
-        gc.setStroke(Color.rgb(180, 180, 180, 0.6));
-        gc.setLineWidth(2.0);
-        
-        double roadWidth = SimConfig.LANE_WIDTH * 4; 
-        double stripeLen = 8;
-        double stripeSpace = 6.0;
-        
-        for (double y = -roadWidth/2 + 2; y <= roadWidth/2 - 2; y += stripeSpace) {
-            gc.strokeLine(-stripeLen/2, y, stripeLen/2, y);
+        // Draw background shadow/subtle overlay
+        gc.setFill(Color.rgb(0, 0, 0, 0.15));
+        gc.fillRect(-9, -64, 18, 128);
+
+        // Draw side boundary lines (illuminated smart crosswalk borders)
+        gc.setStroke(Color.rgb(255, 255, 255, 0.6));
+        gc.setLineWidth(1.5);
+        gc.strokeLine(-9, -64, -9, 64);
+        gc.strokeLine(9, -64, 9, 64);
+
+        // Draw thick white zebra stripes
+        gc.setFill(Color.rgb(255, 255, 255, 0.85));
+        double stripeLen = 14;
+        double stripeWidth = 4;
+        double stripeSpace = 9.0;
+        for (double y = -58; y <= 58; y += stripeSpace) {
+            gc.fillRect(-stripeLen/2, y - stripeWidth/2, stripeLen, stripeWidth);
         }
+
+        // Draw glowing LED curb lights
+        gc.setFill(Color.rgb(0, 255, 220, 0.85));
+        gc.setEffect(new javafx.scene.effect.Glow(0.9));
+        gc.fillOval(-11, -66, 4, 4);
+        gc.fillOval(7, -66, 4, 4);
+        gc.fillOval(-11, 62, 4, 4);
+        gc.fillOval(7, 62, 4, 4);
+        
+        gc.setEffect(null);
         gc.restore();
     }
 
@@ -230,15 +266,7 @@ public class BasicRenderer implements SceneRenderer {
     }
 
     static void drawStopLines(GraphicsContext gc, Road road) {
-        for (Lane lane : road.getLanes()) {
-            if (!lane.isStopLineSet()) continue;
-            // Perpendicular to lane direction, width = lane width
-            double px = -lane.getDirY() * (SimConfig.LANE_WIDTH * 0.52);
-            double py =  lane.getDirX() * (SimConfig.LANE_WIDTH * 0.52);
-            double sx = lane.getStopLineX(), sy = lane.getStopLineY();
-            gc.setStroke(STOP_LINE); gc.setLineWidth(4.0);
-            gc.strokeLine(sx-px, sy-py, sx+px, sy+py);
-        }
+        // Stop lines are visually removed per user request to improve aesthetics
     }
 
     static void drawLight(GraphicsContext gc, TrafficLight tl) {
@@ -278,6 +306,14 @@ public class BasicRenderer implements SceneRenderer {
         gc.setFont(Font.font("Arial Bold", Math.max(5.5, 6.5)));
         gc.setTextAlign(TextAlignment.CENTER);
         gc.fillText(v.getShortName(), 0, 2);
+        
+        if (v instanceof com.trafficsim.model.vehicle.PoliceCar) {
+            com.trafficsim.model.vehicle.PoliceCar pc = (com.trafficsim.model.vehicle.PoliceCar) v;
+            if (pc.isFlashOn()) {
+                gc.setFill(pc.isFlashBlue() ? Color.BLUE : Color.RED);
+                gc.fillRect(-1.5, -vw/2 + 1, 3, vw - 2);
+            }
+        }
         gc.restore();
     }
 

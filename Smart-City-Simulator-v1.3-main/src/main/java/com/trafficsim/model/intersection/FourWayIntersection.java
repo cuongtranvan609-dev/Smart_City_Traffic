@@ -19,11 +19,11 @@ public class FourWayIntersection extends Intersection {
 
     private void buildLights() {
         double r = getRadius();
-        // NS green first, EW red
-        TrafficLight n = new TrafficLight(cx,    cy-r, Direction.SOUTH, TrafficLight.Phase.GREEN);
-        TrafficLight s = new TrafficLight(cx,    cy+r, Direction.NORTH, TrafficLight.Phase.GREEN);
-        TrafficLight e = new TrafficLight(cx+r,  cy,   Direction.WEST,  TrafficLight.Phase.RED);
-        TrafficLight w = new TrafficLight(cx-r,  cy,   Direction.EAST,  TrafficLight.Phase.RED);
+        // NS green first, EW red, all placed on right curb of their incoming direction
+        TrafficLight n = new TrafficLight(cx - 72,  cy - (r + 27),  Direction.SOUTH, TrafficLight.Phase.GREEN);
+        TrafficLight s = new TrafficLight(cx + 72,  cy + (r + 27),  Direction.NORTH, TrafficLight.Phase.GREEN);
+        TrafficLight e = new TrafficLight(cx + (r + 27),   cy - 72, Direction.WEST,  TrafficLight.Phase.RED);
+        TrafficLight w = new TrafficLight(cx - (r + 27),   cy + 72, Direction.EAST,  TrafficLight.Phase.RED);
         n.setDisplayType(TrafficLight.DisplayType.LATE_COUNTDOWN);
         s.setDisplayType(TrafficLight.DisplayType.LATE_COUNTDOWN);
         e.setDisplayType(TrafficLight.DisplayType.ALWAYS_COUNTDOWN);

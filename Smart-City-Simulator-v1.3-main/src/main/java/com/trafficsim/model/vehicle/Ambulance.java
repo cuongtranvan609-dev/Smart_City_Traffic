@@ -12,7 +12,7 @@ public class Ambulance extends Vehicle {
 
     public Ambulance(double x, double y, Direction dir) {
         super(x, y, dir, 110, 22, 10, new EmergencyDriver());
-        this.preferredLaneIndex = 2; // Emergency lane
+        this.preferredLaneIndex = 0;
         honk();
     }
     @Override public boolean isPriorityVehicle() { return true; }

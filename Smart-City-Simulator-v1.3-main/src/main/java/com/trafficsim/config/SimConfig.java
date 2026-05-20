@@ -8,8 +8,8 @@ public final class SimConfig {
     public static final double CANVAS_WIDTH  = 980;
     public static final double CANVAS_HEIGHT = 760;
 
-    // Road geometry - 3 lanes per direction
-    public static final double ROAD_HALF_WIDTH = 48; // half total road width
+    // Road geometry - 4 lanes per direction
+    public static final double ROAD_HALF_WIDTH = 64; // half total road width
     public static final double LANE_WIDTH      = 16; // each lane width
 
     // Vehicle defaults
