@@ -45,8 +45,10 @@ public class GraphicRenderer implements SceneRenderer {
         // 2. Draw Procedural City Blocks (Buildings, Parks, Trees)
         drawCityBlocks(gc, scene, minX, maxX, minY, maxY);
 
-        // 3. Draw Roads (Asphalt & Curb)
-        scene.getRoads().forEach(r -> drawRoad(gc, r, scene));
+        // 3. Draw Roads (Asphalt & Curb in passes to avoid overlap issues)
+        scene.getRoads().forEach(r -> drawRoadCurb(gc, r, scene));
+        scene.getRoads().forEach(r -> drawRoadAsphalt(gc, r, scene));
+        scene.getRoads().forEach(r -> drawRoadMarkings(gc, r, scene));
         
         // 4. Draw Intersections (Asphalt, Crosswalks, Markings)
         scene.getIntersections().forEach(i -> drawIntersection(gc, i));
@@ -75,14 +77,31 @@ public class GraphicRenderer implements SceneRenderer {
         gc.setLineWidth(fullW + 36);
         gc.setLineCap(javafx.scene.shape.StrokeLineCap.BUTT);
         for (Road r : scene.getRoads()) {
-            gc.strokeLine(r.getX1(), r.getY1(), r.getX2(), r.getY2());
+            double r1 = getRoadOffsetRadius(r, scene, true);
+            double r2 = getRoadOffsetRadius(r, scene, false);
+            
+            double dx = r.getX2() - r.getX1();
+            double dy = r.getY2() - r.getY1();
+            double len = Math.hypot(dx, dy);
+            if (len < 1) continue;
+            double ux = dx / len;
+            double uy = dy / len;
+            
+            double sx = r.getX1() + ux * r1;
+            double sy = r.getY1() + uy * r1;
+            double ex = r.getX2() - ux * r2;
+            double ey = r.getY2() - uy * r2;
+            
+            gc.strokeLine(sx, sy, ex, ey);
         }
         
-        // Draw sidewalks around all intersections
+        // Draw sidewalks around all intersections (only roundabouts / five-way)
         gc.setFill(c(SIDEWALK));
         for (Intersection i : scene.getIntersections()) {
-            double r = i.getRadius() + 18;
-            gc.fillOval(i.getCx() - r, i.getCy() - r, r * 2, r * 2);
+            if (i.getType() == Intersection.Type.FIVE_WAY) {
+                double r = i.getRadius() + 18;
+                gc.fillOval(i.getCx() - r, i.getCy() - r, r * 2, r * 2);
+            }
         }
     }
 
@@ -274,7 +293,33 @@ public class GraphicRenderer implements SceneRenderer {
         gc.fillOval(tx - r*0.5, ty - r*0.5, r, r);
     }
 
-    private void drawRoad(GraphicsContext gc, Road road, SimScene scene) {
+    private double getRoadOffsetRadius(Road road, SimScene scene, boolean startNode) {
+        double rx = startNode ? road.getX1() : road.getX2();
+        double ry = startNode ? road.getY1() : road.getY2();
+        for (Intersection i : scene.getIntersections()) {
+            if (Math.hypot(i.getCx() - rx, i.getCy() - ry) < 1) {
+                if (i.getType() == Intersection.Type.FIVE_WAY) {
+                    return i.getRadius();
+                } else {
+                    return 0; // standard intersection, extend asphalt and curb to center
+                }
+            }
+        }
+        return 0;
+    }
+
+    private double getIntersectionRadius(Road road, SimScene scene, boolean startNode) {
+        double rx = startNode ? road.getX1() : road.getX2();
+        double ry = startNode ? road.getY1() : road.getY2();
+        for (Intersection i : scene.getIntersections()) {
+            if (Math.hypot(i.getCx() - rx, i.getCy() - ry) < 1) {
+                return i.getRadius() + 30.0;
+            }
+        }
+        return 0;
+    }
+
+    private void drawRoadCurb(GraphicsContext gc, Road road, SimScene scene) {
         double lw = SimConfig.LANE_WIDTH;
         double fullW = lw * 8; // 4 lanes per direction
         
@@ -282,22 +327,16 @@ public class GraphicRenderer implements SceneRenderer {
         double dy = road.getY2() - road.getY1();
         double len = Math.hypot(dx, dy);
         if (len < 1) return;
-        double px = -dy / len;
-        double py =  dx / len;
 
-        double r1 = 0, r2 = 0;
-        for (Intersection i : scene.getIntersections()) {
-            if (Math.hypot(i.getCx() - road.getX1(), i.getCy() - road.getY1()) < 1) r1 = i.getRadius();
-            if (Math.hypot(i.getCx() - road.getX2(), i.getCy() - road.getY2()) < 1) r2 = i.getRadius();
-        }
+        double r1 = getRoadOffsetRadius(road, scene, true);
+        double r2 = getRoadOffsetRadius(road, scene, false);
 
         double ux = dx / len;
         double uy = dy / len;
-        // Extend slightly into the intersection to avoid gaps, but not all the way to center
-        double lx1 = road.getX1() + ux * (r1 * 0.9);
-        double ly1 = road.getY1() + uy * (r1 * 0.9);
-        double lx2 = road.getX2() - ux * (r2 * 0.9);
-        double ly2 = road.getY2() - uy * (r2 * 0.9);
+        double lx1 = road.getX1() + ux * r1;
+        double ly1 = road.getY1() + uy * r1;
+        double lx2 = road.getX2() - ux * r2;
+        double ly2 = road.getY2() - uy * r2;
 
         if (r1 + r2 >= len) return;
 
@@ -307,14 +346,11 @@ public class GraphicRenderer implements SceneRenderer {
         gc.setStroke(c(CURB)); 
         gc.setLineWidth(fullW + 12);
         gc.strokeLine(lx1, ly1, lx2, ly2);
-        
-        // Asphalt fill
-        gc.setStroke(c(ASPHALT)); 
-        gc.setLineWidth(fullW);
-        gc.strokeLine(lx1, ly1, lx2, ly2);
 
         // Neon Glow Curb Outline at night
         if (isNight) {
+            double px = -dy / len;
+            double py =  dx / len;
             gc.save();
             gc.setEffect(new Glow(0.35));
             gc.setStroke(Color.rgb(0, 180, 255, 0.45)); // Soft Neon Blue
@@ -326,6 +362,58 @@ public class GraphicRenderer implements SceneRenderer {
                           lx2 - px * offsetDist, ly2 - py * offsetDist);
             gc.restore();
         }
+    }
+
+    private void drawRoadAsphalt(GraphicsContext gc, Road road, SimScene scene) {
+        double lw = SimConfig.LANE_WIDTH;
+        double fullW = lw * 8; // 4 lanes per direction
+        
+        double dx = road.getX2() - road.getX1();
+        double dy = road.getY2() - road.getY1();
+        double len = Math.hypot(dx, dy);
+        if (len < 1) return;
+
+        double r1 = getRoadOffsetRadius(road, scene, true);
+        double r2 = getRoadOffsetRadius(road, scene, false);
+
+        double ux = dx / len;
+        double uy = dy / len;
+        double lx1 = road.getX1() + ux * r1;
+        double ly1 = road.getY1() + uy * r1;
+        double lx2 = road.getX2() - ux * r2;
+        double ly2 = road.getY2() - uy * r2;
+
+        if (r1 + r2 >= len) return;
+
+        // Asphalt fill
+        gc.setStroke(c(ASPHALT)); 
+        gc.setLineWidth(fullW);
+        gc.strokeLine(lx1, ly1, lx2, ly2);
+    }
+
+    private void drawRoadMarkings(GraphicsContext gc, Road road, SimScene scene) {
+        double lw = SimConfig.LANE_WIDTH;
+        
+        double dx = road.getX2() - road.getX1();
+        double dy = road.getY2() - road.getY1();
+        double len = Math.hypot(dx, dy);
+        if (len < 1) return;
+        double px = -dy / len;
+        double py =  dx / len;
+
+        double r1 = getIntersectionRadius(road, scene, true);
+        double r2 = getIntersectionRadius(road, scene, false);
+
+        double ux = dx / len;
+        double uy = dy / len;
+        double lx1 = road.getX1() + ux * r1;
+        double ly1 = road.getY1() + uy * r1;
+        double lx2 = road.getX2() - ux * r2;
+        double ly2 = road.getY2() - uy * r2;
+
+        if (r1 + r2 >= len) return;
+
+        boolean isNight = SimConfig.isNightMode();
 
         // Brown-tinted bicycle lane background
         gc.setStroke(c(Color.rgb(139, 90, 43, 0.28)));
@@ -390,15 +478,15 @@ public class GraphicRenderer implements SceneRenderer {
     private void drawIntersection(GraphicsContext gc, Intersection inter) {
         double r = inter.getRadius();
         
-        // Curb outline
-        gc.setFill(c(CURB));
-        gc.fillOval(inter.getCx() - r - 6, inter.getCy() - r - 6, (r + 6)*2, (r + 6)*2);
-        
-        // Asphalt fill
-        gc.setFill(c(ASPHALT));
-        gc.fillOval(inter.getCx() - r, inter.getCy() - r, r*2, r*2);
- 
         if (inter.getType() == Intersection.Type.FIVE_WAY) {
+            // Curb outline
+            gc.setFill(c(CURB));
+            gc.fillOval(inter.getCx() - r - 6, inter.getCy() - r - 6, (r + 6)*2, (r + 6)*2);
+            
+            // Asphalt fill
+            gc.setFill(c(ASPHALT));
+            gc.fillOval(inter.getCx() - r, inter.getCy() - r, r*2, r*2);
+ 
             // Beautiful Roundabout Center Island (Fountain / Monument)
             // Outer decorative ring
             gc.setFill(c(Color.rgb(180, 180, 180)));
@@ -443,19 +531,6 @@ public class GraphicRenderer implements SceneRenderer {
             gc.fillOval(inter.getCx() - r*0.1, inter.getCy() - r*0.1, r*0.2, r*0.2);
             
             // Note: Dashed guide lines and extra markings are intentionally removed 
-        } else {
-            // Center directional chevrons
-            gc.setStroke(c(Color.rgb(255, 215, 0, 0.85)));
-            gc.setLineWidth(2);
-            double dist = r * 0.45;
-            for (Direction d : Direction.values()) {
-                gc.save();
-                gc.translate(inter.getCx() + d.dx * dist, inter.getCy() + d.dy * dist);
-                gc.rotate(d.angleDeg); 
-                gc.strokeLine(0, 0, -6, -5);
-                gc.strokeLine(0, 0, -6, 5);
-                gc.restore();
-            }
         }
 
         // Draw pedestrian crosswalks on all road arms
@@ -470,12 +545,6 @@ public class GraphicRenderer implements SceneRenderer {
                 BasicRenderer.drawBeautifulCrosswalk(gc, inter.getCx(), inter.getCy(), inter.getRadius(), 360.0 - fwi.getArmAngle(i));
             }
         }
-
-        // Intersection text
-        gc.setFill(c(Color.rgb(255, 255, 255, 0.6)));
-        gc.setFont(Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 12));
-        gc.setTextAlign(TextAlignment.CENTER);
-        gc.fillText(inter.getTypeName(), inter.getCx(), inter.getCy() + 4);
 
         // Draw streetlights at intersections at night
         double amb = SimConfig.getAmbientLight();

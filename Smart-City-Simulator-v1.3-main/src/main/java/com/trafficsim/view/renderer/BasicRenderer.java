@@ -34,7 +34,9 @@ public class BasicRenderer implements SceneRenderer {
         gc.translate(panX, panY);
         gc.scale(zoom, zoom);
 
-        scene.getRoads().forEach(r -> drawRoad(gc, r));
+        scene.getRoads().forEach(r -> drawRoadCurb(gc, r, scene));
+        scene.getRoads().forEach(r -> drawRoadAsphalt(gc, r, scene));
+        scene.getRoads().forEach(r -> drawRoadMarkings(gc, r, scene));
         scene.getIntersections().forEach(i -> drawIntersection(gc, i));
         drawTurnGuides(gc, scene);
         scene.getRoads().forEach(r -> drawStopLines(gc, r));
@@ -44,38 +46,121 @@ public class BasicRenderer implements SceneRenderer {
         gc.restore();
     }
 
-    static void drawRoad(GraphicsContext gc, Road road) {
+    private static double getRoadOffsetRadius(Road road, SimScene scene, boolean startNode) {
+        double rx = startNode ? road.getX1() : road.getX2();
+        double ry = startNode ? road.getY1() : road.getY2();
+        for (Intersection i : scene.getIntersections()) {
+            if (Math.hypot(i.getCx() - rx, i.getCy() - ry) < 1) {
+                if (i.getType() == Intersection.Type.FIVE_WAY) {
+                    return i.getRadius();
+                } else {
+                    return 0; // standard intersection, extend asphalt and curb to center
+                }
+            }
+        }
+        return 0;
+    }
+
+    private static double getIntersectionRadius(Road road, SimScene scene, boolean startNode) {
+        double rx = startNode ? road.getX1() : road.getX2();
+        double ry = startNode ? road.getY1() : road.getY2();
+        for (Intersection i : scene.getIntersections()) {
+            if (Math.hypot(i.getCx() - rx, i.getCy() - ry) < 1) {
+                return i.getRadius() + 30.0;
+            }
+        }
+        return 0;
+    }
+
+    private static void drawRoadCurb(GraphicsContext gc, Road road, SimScene scene) {
         double lw = SimConfig.LANE_WIDTH;
         double hw  = lw * 4; // half total width (4 lanes per direction)
         double fullW = hw * 2;
 
         double dx = road.getX2()-road.getX1(), dy = road.getY2()-road.getY1();
         double len = Math.sqrt(dx*dx+dy*dy); if (len<1) return;
-        // Unit perpendicular to the drawn centerline.
-        double px = -dy/len, py = dx/len;
+
+        double r1 = getRoadOffsetRadius(road, scene, true);
+        double r2 = getRoadOffsetRadius(road, scene, false);
+
+        double ux = dx / len;
+        double uy = dy / len;
+        double lx1 = road.getX1() + ux * r1;
+        double ly1 = road.getY1() + uy * r1;
+        double lx2 = road.getX2() - ux * r2;
+        double ly2 = road.getY2() - uy * r2;
+
+        if (r1 + r2 >= len) return;
 
         boolean isNight = SimConfig.isNightMode();
 
         // Curb
         gc.setStroke(c(CURB_CLR)); gc.setLineWidth(fullW+5);
-        gc.strokeLine(road.getX1(), road.getY1(), road.getX2(), road.getY2());
-        // Asphalt
-        gc.setStroke(c(ROAD_CLR)); gc.setLineWidth(fullW);
-        gc.strokeLine(road.getX1(), road.getY1(), road.getX2(), road.getY2());
+        gc.strokeLine(lx1, ly1, lx2, ly2);
 
         // Neon Glow Curb Outline at night
         if (isNight) {
+            double px = -dy/len, py = dx/len;
             gc.save();
             gc.setEffect(new Glow(0.35));
             gc.setStroke(Color.rgb(0, 180, 255, 0.45)); // Soft Neon Blue
             gc.setLineWidth(2.0);
             double offsetDist = (fullW + 5) / 2.0;
-            gc.strokeLine(road.getX1() + px * offsetDist, road.getY1() + py * offsetDist,
-                          road.getX2() + px * offsetDist, road.getY2() + py * offsetDist);
-            gc.strokeLine(road.getX1() - px * offsetDist, road.getY1() - py * offsetDist,
-                          road.getX2() - px * offsetDist, road.getY2() - py * offsetDist);
+            gc.strokeLine(lx1 + px * offsetDist, ly1 + py * offsetDist,
+                          lx2 + px * offsetDist, ly2 + py * offsetDist);
+            gc.strokeLine(lx1 - px * offsetDist, ly1 - py * offsetDist,
+                          lx2 - px * offsetDist, ly2 - py * offsetDist);
             gc.restore();
         }
+    }
+
+    private static void drawRoadAsphalt(GraphicsContext gc, Road road, SimScene scene) {
+        double lw = SimConfig.LANE_WIDTH;
+        double hw  = lw * 4; // half total width (4 lanes per direction)
+        double fullW = hw * 2;
+
+        double dx = road.getX2()-road.getX1(), dy = road.getY2()-road.getY1();
+        double len = Math.sqrt(dx*dx+dy*dy); if (len<1) return;
+
+        double r1 = getRoadOffsetRadius(road, scene, true);
+        double r2 = getRoadOffsetRadius(road, scene, false);
+
+        double ux = dx / len;
+        double uy = dy / len;
+        double lx1 = road.getX1() + ux * r1;
+        double ly1 = road.getY1() + uy * r1;
+        double lx2 = road.getX2() - ux * r2;
+        double ly2 = road.getY2() - uy * r2;
+
+        if (r1 + r2 >= len) return;
+
+        // Asphalt
+        gc.setStroke(c(ROAD_CLR)); gc.setLineWidth(fullW);
+        gc.strokeLine(lx1, ly1, lx2, ly2);
+    }
+
+    private static void drawRoadMarkings(GraphicsContext gc, Road road, SimScene scene) {
+        double lw = SimConfig.LANE_WIDTH;
+        double hw  = lw * 4; // half total width (4 lanes per direction)
+        double fullW = hw * 2;
+
+        double dx = road.getX2()-road.getX1(), dy = road.getY2()-road.getY1();
+        double len = Math.sqrt(dx*dx+dy*dy); if (len<1) return;
+        double px = -dy/len, py = dx/len;
+
+        double r1 = getIntersectionRadius(road, scene, true);
+        double r2 = getIntersectionRadius(road, scene, false);
+
+        double ux = dx / len;
+        double uy = dy / len;
+        double lx1 = road.getX1() + ux * r1;
+        double ly1 = road.getY1() + uy * r1;
+        double lx2 = road.getX2() - ux * r2;
+        double ly2 = road.getY2() - uy * r2;
+
+        if (r1 + r2 >= len) return;
+
+        boolean isNight = SimConfig.isNightMode();
 
         // Center yellow double line
         if (isNight) {
@@ -86,7 +171,7 @@ public class BasicRenderer implements SceneRenderer {
             gc.setStroke(CENTER_LINE);
         }
         gc.setLineWidth(1.4); gc.setLineDashes(null);
-        gc.strokeLine(road.getX1(), road.getY1(), road.getX2(), road.getY2());
+        gc.strokeLine(lx1, ly1, lx2, ly2);
         if (isNight) {
             gc.restore();
         }
@@ -103,16 +188,16 @@ public class BasicRenderer implements SceneRenderer {
         
         // Divider 1 (offset 18.0)
         gc.setLineDashes(8, 6);
-        gc.strokeLine(road.getX1() + px * 18.0, road.getY1() + py * 18.0,
-                      road.getX2() + px * 18.0, road.getY2() + py * 18.0);
-        gc.strokeLine(road.getX1() - px * 18.0, road.getY1() - py * 18.0,
-                      road.getX2() - px * 18.0, road.getY2() - py * 18.0);
+        gc.strokeLine(lx1 + px * 18.0, ly1 + py * 18.0,
+                      lx2 + px * 18.0, ly2 + py * 18.0);
+        gc.strokeLine(lx1 - px * 18.0, ly1 - py * 18.0,
+                      lx2 - px * 18.0, ly2 - py * 18.0);
 
         // Divider 2 (offset 36.0)
-        gc.strokeLine(road.getX1() + px * 36.0, road.getY1() + py * 36.0,
-                      road.getX2() + px * 36.0, road.getY2() + py * 36.0);
-        gc.strokeLine(road.getX1() - px * 36.0, road.getY1() - py * 36.0,
-                      road.getX2() - px * 36.0, road.getY2() - py * 36.0); 
+        gc.strokeLine(lx1 + px * 36.0, ly1 + py * 36.0,
+                      lx2 + px * 36.0, ly2 + py * 36.0);
+        gc.strokeLine(lx1 - px * 36.0, ly1 - py * 36.0,
+                      lx2 - px * 36.0, ly2 - py * 36.0); 
 
         if (isNight) {
             gc.restore();
@@ -127,10 +212,10 @@ public class BasicRenderer implements SceneRenderer {
             gc.setStroke(Color.WHITE);
         }
         gc.setLineDashes(null);
-        gc.strokeLine(road.getX1() + px * 54.0, road.getY1() + py * 54.0,
-                      road.getX2() + px * 54.0, road.getY2() + py * 54.0);
-        gc.strokeLine(road.getX1() - px * 54.0, road.getY1() - py * 54.0,
-                      road.getX2() - px * 54.0, road.getY2() - py * 54.0);
+        gc.strokeLine(lx1 + px * 54.0, ly1 + py * 54.0,
+                      lx2 + px * 54.0, ly2 + py * 54.0);
+        gc.strokeLine(lx1 - px * 54.0, ly1 - py * 54.0,
+                      lx2 - px * 54.0, ly2 - py * 54.0);
         if (isNight) {
             gc.restore();
         }
@@ -138,10 +223,9 @@ public class BasicRenderer implements SceneRenderer {
 
     static void drawIntersection(GraphicsContext gc, Intersection inter) {
         double r = inter.getRadius();
-        gc.setFill(c(INTER_CLR));
-        gc.fillOval(inter.getCx()-r, inter.getCy()-r, r*2, r*2);
-
         if (inter.getType() == Intersection.Type.FIVE_WAY) {
+            gc.setFill(c(INTER_CLR));
+            gc.fillOval(inter.getCx()-r, inter.getCy()-r, r*2, r*2);
             gc.setFill(c(BG));
             gc.fillOval(inter.getCx()-56, inter.getCy()-56, 56*2, 56*2);
             gc.setStroke(LANE_DASH);
@@ -164,12 +248,6 @@ public class BasicRenderer implements SceneRenderer {
                 drawBeautifulCrosswalk(gc, inter.getCx(), inter.getCy(), inter.getRadius(), 360.0 - fwi.getArmAngle(i));
             }
         }
-
-        // Label
-        gc.setFill(Color.rgb(200,200,180,0.75));
-        gc.setFont(Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 9));
-        gc.setTextAlign(TextAlignment.CENTER);
-        gc.fillText(inter.getTypeName(), inter.getCx(), inter.getCy()+3);
     }
 
     public static void drawBeautifulCrosswalk(GraphicsContext gc, double cx, double cy, double r, double screenAngleDeg) {
@@ -197,7 +275,7 @@ public class BasicRenderer implements SceneRenderer {
         double stripeLen = 14;
         double stripeWidth = 4;
         double stripeSpace = 9.0;
-        for (double y = -58; y <= 58; y += stripeSpace) {
+        for (double y = -54; y <= 54; y += stripeSpace) {
             gc.fillRect(-stripeLen/2, y - stripeWidth/2, stripeLen, stripeWidth);
         }
 

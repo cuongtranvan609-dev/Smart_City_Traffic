@@ -46,7 +46,7 @@ public class ThreeWayIntersection extends Intersection {
         TrafficLight w = new TrafficLight(cx - (r + 27), cy + 72, Direction.EAST, TrafficLight.Phase.RED);
 
         n.setDisplayType(TrafficLight.DisplayType.LATE_COUNTDOWN);
-        e.setDisplayType(TrafficLight.DisplayType.ALWAYS_COUNTDOWN);
+        e.setDisplayType(TrafficLight.DisplayType.LATE_COUNTDOWN);
         w.setDisplayType(TrafficLight.DisplayType.LATE_COUNTDOWN);
         trafficLights.addAll(List.of(n, e, w));
     }

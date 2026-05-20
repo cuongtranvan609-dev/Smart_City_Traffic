@@ -214,14 +214,16 @@ public class ControlPanel extends ScrollPane {
     }
 
     // ===== LIGHT TYPE =====
+    private ComboBox<String> lightTypeCombo;
+
     private VBox buildLightType() {
-        ComboBox<String> cb = new ComboBox<>();
-        cb.getItems().addAll("Luôn đếm ngược","Không đếm ngược","Đếm khi ≤10s");
-        cb.setValue("Đếm khi ≤10s");
-        cb.setStyle("-fx-background-color:#2a2a40;-fx-text-fill:white;");
-        cb.setOnAction(e -> {
+        lightTypeCombo = new ComboBox<>();
+        lightTypeCombo.getItems().addAll("Luôn đếm ngược","Không đếm ngược","Đếm khi ≤10s");
+        lightTypeCombo.setValue("Đếm khi ≤10s");
+        lightTypeCombo.setStyle("-fx-background-color:#2a2a40;-fx-text-fill:white;");
+        lightTypeCombo.setOnAction(e -> {
             if (controller==null) return;
-            TrafficLight.DisplayType dt = switch(cb.getSelectionModel().getSelectedIndex()) {
+            TrafficLight.DisplayType dt = switch(lightTypeCombo.getSelectionModel().getSelectedIndex()) {
                 case 0 -> TrafficLight.DisplayType.ALWAYS_COUNTDOWN;
                 case 1 -> TrafficLight.DisplayType.NO_COUNTDOWN;
                 default-> TrafficLight.DisplayType.LATE_COUNTDOWN;
@@ -229,7 +231,7 @@ public class ControlPanel extends ScrollPane {
             controller.getScene().getIntersections().forEach(i ->
                 i.getTrafficLights().forEach(tl -> tl.setDisplayType(dt)));
         });
-        return new VBox(4, cb);
+        return new VBox(4, lightTypeCombo);
     }
 
     // ===== SOUND =====
@@ -300,6 +302,18 @@ public class ControlPanel extends ScrollPane {
         }
         simCanvas.setController(controller);
         simCanvas.resetZoom();
+        
+        // Apply current light display type from lightTypeCombo if initialized
+        if (lightTypeCombo != null) {
+            TrafficLight.DisplayType dt = switch(lightTypeCombo.getSelectionModel().getSelectedIndex()) {
+                case 0 -> TrafficLight.DisplayType.ALWAYS_COUNTDOWN;
+                case 1 -> TrafficLight.DisplayType.NO_COUNTDOWN;
+                default-> TrafficLight.DisplayType.LATE_COUNTDOWN;
+            };
+            scene.getIntersections().forEach(i ->
+                i.getTrafficLights().forEach(tl -> tl.setDisplayType(dt)));
+        }
+
         // Refresh speed panel with new scene
         if (speedPanel != null) {
             content.getChildren().remove(speedPanel);
