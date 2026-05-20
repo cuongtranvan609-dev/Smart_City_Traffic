@@ -63,6 +63,10 @@ public class TrafficController {
     }
 
     public void update(double dt) {
+        if (com.trafficsim.config.SimConfig.timeMode == com.trafficsim.config.SimConfig.TimeMode.CYCLE) {
+            double speed = 24.0 / 90.0; // 90 seconds for 24 hours
+            com.trafficsim.config.SimConfig.timeOfDay = (com.trafficsim.config.SimConfig.timeOfDay + dt * speed) % 24.0;
+        }
         updateStuckVehicles(dt);
         scene.getIntersections().forEach(i -> i.update(dt));
         handlePriorityYielding();

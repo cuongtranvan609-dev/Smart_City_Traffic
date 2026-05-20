@@ -9,6 +9,7 @@ import com.trafficsim.model.road.Lane;
 import com.trafficsim.model.road.Road;
 import com.trafficsim.model.vehicle.Vehicle;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.effect.Glow;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.TextAlignment;
@@ -27,7 +28,7 @@ public class BasicRenderer implements SceneRenderer {
     public void render(GraphicsContext gc, SimScene scene, double zoom, double panX, double panY) {
         double W = gc.getCanvas().getWidth(), H = gc.getCanvas().getHeight();
         gc.clearRect(0,0,W,H);
-        gc.setFill(BG); gc.fillRect(0,0,W,H);
+        gc.setFill(c(BG)); gc.fillRect(0,0,W,H);
 
         gc.save();
         gc.translate(panX, panY);
@@ -53,45 +54,95 @@ public class BasicRenderer implements SceneRenderer {
         // Unit perpendicular to the drawn centerline.
         double px = -dy/len, py = dx/len;
 
+        boolean isNight = SimConfig.isNightMode();
+
         // Curb
-        gc.setStroke(CURB_CLR); gc.setLineWidth(fullW+5);
+        gc.setStroke(c(CURB_CLR)); gc.setLineWidth(fullW+5);
         gc.strokeLine(road.getX1(), road.getY1(), road.getX2(), road.getY2());
         // Asphalt
-        gc.setStroke(ROAD_CLR); gc.setLineWidth(fullW);
+        gc.setStroke(c(ROAD_CLR)); gc.setLineWidth(fullW);
         gc.strokeLine(road.getX1(), road.getY1(), road.getX2(), road.getY2());
+
+        // Neon Glow Curb Outline at night
+        if (isNight) {
+            gc.save();
+            gc.setEffect(new Glow(0.35));
+            gc.setStroke(Color.rgb(0, 180, 255, 0.45)); // Soft Neon Blue
+            gc.setLineWidth(2.0);
+            double offsetDist = (fullW + 5) / 2.0;
+            gc.strokeLine(road.getX1() + px * offsetDist, road.getY1() + py * offsetDist,
+                          road.getX2() + px * offsetDist, road.getY2() + py * offsetDist);
+            gc.strokeLine(road.getX1() - px * offsetDist, road.getY1() - py * offsetDist,
+                          road.getX2() - px * offsetDist, road.getY2() - py * offsetDist);
+            gc.restore();
+        }
 
         // Center yellow double line
-        gc.setStroke(CENTER_LINE); gc.setLineWidth(1.4); gc.setLineDashes(null);
+        if (isNight) {
+            gc.save();
+            gc.setEffect(new Glow(0.35));
+            gc.setStroke(Color.rgb(255, 215, 0, 0.75)); // Soft Yellow Glow
+        } else {
+            gc.setStroke(CENTER_LINE);
+        }
+        gc.setLineWidth(1.4); gc.setLineDashes(null);
         gc.strokeLine(road.getX1(), road.getY1(), road.getX2(), road.getY2());
+        if (isNight) {
+            gc.restore();
+        }
 
-        // White dashed dividers between lanes within each direction (lane 0-1 and 1-2)
-        gc.setStroke(LANE_DASH); gc.setLineWidth(0.8); gc.setLineDashes(8,6);
+        // Animated lane dividers - disabled movement, only static glow
+        if (isNight) {
+            gc.save();
+            gc.setEffect(new Glow(0.35));
+            gc.setStroke(Color.rgb(255, 255, 255, 0.70)); // Soft White Glow
+        } else {
+            gc.setStroke(LANE_DASH);
+        }
+        gc.setLineWidth(0.8);
+        
         // Divider 1 (offset 18.0)
+        gc.setLineDashes(8, 6);
         gc.strokeLine(road.getX1() + px * 18.0, road.getY1() + py * 18.0,
                       road.getX2() + px * 18.0, road.getY2() + py * 18.0);
         gc.strokeLine(road.getX1() - px * 18.0, road.getY1() - py * 18.0,
                       road.getX2() - px * 18.0, road.getY2() - py * 18.0);
+
         // Divider 2 (offset 36.0)
         gc.strokeLine(road.getX1() + px * 36.0, road.getY1() + py * 36.0,
                       road.getX2() + px * 36.0, road.getY2() + py * 36.0);
         gc.strokeLine(road.getX1() - px * 36.0, road.getY1() - py * 36.0,
-                      road.getX2() - px * 36.0, road.getY2() - py * 36.0);
+                      road.getX2() - px * 36.0, road.getY2() - py * 36.0); 
+
+        if (isNight) {
+            gc.restore();
+        }
         
         // Solid divider for bicycle lane (offset 54.0)
+        if (isNight) {
+            gc.save();
+            gc.setEffect(new Glow(0.35));
+            gc.setStroke(Color.rgb(255, 255, 255, 0.70)); // Soft White Glow
+        } else {
+            gc.setStroke(Color.WHITE);
+        }
         gc.setLineDashes(null);
         gc.strokeLine(road.getX1() + px * 54.0, road.getY1() + py * 54.0,
                       road.getX2() + px * 54.0, road.getY2() + py * 54.0);
         gc.strokeLine(road.getX1() - px * 54.0, road.getY1() - py * 54.0,
                       road.getX2() - px * 54.0, road.getY2() - py * 54.0);
+        if (isNight) {
+            gc.restore();
+        }
     }
 
     static void drawIntersection(GraphicsContext gc, Intersection inter) {
         double r = inter.getRadius();
-        gc.setFill(INTER_CLR);
+        gc.setFill(c(INTER_CLR));
         gc.fillOval(inter.getCx()-r, inter.getCy()-r, r*2, r*2);
 
         if (inter.getType() == Intersection.Type.FIVE_WAY) {
-            gc.setFill(BG);
+            gc.setFill(c(BG));
             gc.fillOval(inter.getCx()-56, inter.getCy()-56, 56*2, 56*2);
             gc.setStroke(LANE_DASH);
             gc.setLineWidth(1.2);
@@ -289,11 +340,35 @@ public class BasicRenderer implements SceneRenderer {
 
     void drawVehicle(GraphicsContext gc, Vehicle v) {
         double vw=v.getWidth(), vh=v.getLength();
+        double amb = SimConfig.getAmbientLight();
+        
+        // Draw headlights if night
+        if (amb < 0.9) {
+            double alpha = (1.0 - amb) * 0.25;
+            gc.save();
+            gc.translate(v.getRenderX(), v.getRenderY());
+            gc.rotate(v.getHeadingAngleDeg());
+            gc.setFill(Color.rgb(255, 255, 200, alpha));
+            // Left headlight
+            gc.fillPolygon(new double[]{vh/2, vh/2 + 50, vh/2 + 50}, new double[]{-vw/3, -vw/3 - 15, -vw/3 + 10}, 3);
+            // Right headlight
+            gc.fillPolygon(new double[]{vh/2, vh/2 + 50, vh/2 + 50}, new double[]{vw/3, vw/3 - 10, vw/3 + 15}, 3);
+            gc.restore();
+        }
+
         gc.save();
         gc.translate(v.getRenderX(), v.getRenderY());
         gc.rotate(v.getHeadingAngleDeg());
-        gc.setFill(Color.web(v.getColor()));
+        Color baseColor = Color.web(v.getColor());
+        double vAmb = Math.max(0.60, amb);
+        Color darkBase = Color.color(baseColor.getRed() * vAmb, baseColor.getGreen() * vAmb, baseColor.getBlue() * vAmb, baseColor.getOpacity());
+        gc.setFill(darkBase);
         gc.fillRoundRect(-vh/2,-vw/2,vh,vw,2.5,2.5);
+        if (amb < 0.9) {
+            gc.setStroke(Color.rgb(255, 255, 255, 0.40));
+            gc.setLineWidth(0.8);
+            gc.strokeRoundRect(-vh/2,-vw/2,vh,vw,2.5,2.5);
+        }
         if (v.isYieldingForPriority()) {
             gc.setStroke(Color.ORANGE); gc.setLineWidth(1.5);
             gc.strokeRoundRect(-vh/2,-vw/2,vh,vw,2.5,2.5);
@@ -315,6 +390,11 @@ public class BasicRenderer implements SceneRenderer {
             }
         }
         gc.restore();
+    }
+
+    private static Color c(Color base) {
+        double amb = SimConfig.getAmbientLight();
+        return Color.color(base.getRed() * amb, base.getGreen() * amb, base.getBlue() * amb, base.getOpacity());
     }
 
     @Override public String getModeName() { return "Basic"; }

@@ -61,4 +61,25 @@ public final class SimConfig {
 
     // Global speed multiplier (runtime-adjustable)
     public static volatile double globalSpeedMultiplier = 1.0;
+
+    // Day / Night cycle
+    public static enum TimeMode { DAY, NIGHT, CYCLE }
+    public static TimeMode timeMode = TimeMode.DAY;
+    public static double timeOfDay = 12.0; // 0.0 to 24.0 hours
+
+    public static boolean isNightMode() {
+        if (timeMode == TimeMode.NIGHT) return true;
+        if (timeMode == TimeMode.DAY) return false;
+        return timeOfDay < 6.0 || timeOfDay > 18.0;
+    }
+
+    public static double getAmbientLight() {
+        if (timeMode == TimeMode.DAY) return 1.0;
+        if (timeMode == TimeMode.NIGHT) return 0.15;
+        
+        // Cycle mode: mapping 0..24 to cosine wave. Peak day at 12, peak night at 0/24
+        double rad = Math.toRadians((timeOfDay - 12.0) * 15.0); // 12 hours = 180 deg
+        double cosVal = Math.cos(rad);
+        return 0.15 + (1.0 - 0.15) * (cosVal + 1.0) / 2.0;
+    }
 }

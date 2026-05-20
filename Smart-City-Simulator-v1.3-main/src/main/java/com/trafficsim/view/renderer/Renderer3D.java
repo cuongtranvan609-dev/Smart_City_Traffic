@@ -23,6 +23,7 @@ public class Renderer3D implements SceneRenderer {
     private static final Color ASPHALT  = Color.rgb(50, 50, 55);
     private static final Color CURB     = Color.rgb(140, 140, 140);
     private static final Color SIDEWALK = Color.rgb(215, 215, 215);
+    private boolean drawingVehicle = false;
 
     // 3D axonometric tilt projection offsets
     private double getProjX(double x, double z) {
@@ -115,10 +116,10 @@ public class Renderer3D implements SceneRenderer {
     }
 
     private void drawBackground(GraphicsContext gc, double minX, double maxX, double minY, double maxY) {
-        gc.setFill(SIDEWALK);
+        gc.setFill(c(SIDEWALK));
         gc.fillRect(minX, minY, maxX - minX, maxY - minY);
         
-        gc.setStroke(Color.rgb(195, 195, 195));
+        gc.setStroke(c(Color.rgb(195, 195, 195)));
         gc.setLineWidth(1.5);
         double startX = Math.floor(minX / 24) * 24;
         double startY = Math.floor(minY / 24) * 24;
@@ -157,68 +158,124 @@ public class Renderer3D implements SceneRenderer {
 
         if (r1 + r2 >= len) return;
 
-        gc.setStroke(CURB); 
+        boolean isNight = SimConfig.isNightMode();
+
+        gc.setStroke(c(CURB)); 
         gc.setLineWidth(fullW + 12);
         gc.strokeLine(lx1, ly1, lx2, ly2);
         
-        gc.setStroke(ASPHALT); 
+        gc.setStroke(c(ASPHALT)); 
         gc.setLineWidth(fullW);
         gc.strokeLine(lx1, ly1, lx2, ly2);
 
+        // Neon Glow Curb Outline at night
+        if (isNight) {
+            gc.save();
+            gc.setEffect(new Glow(0.35));
+            gc.setStroke(Color.rgb(0, 180, 255, 0.45)); // Soft Neon Blue
+            gc.setLineWidth(2.0);
+            double offsetDist = (fullW + 12) / 2.0;
+            gc.strokeLine(lx1 + px * offsetDist, ly1 + py * offsetDist,
+                          lx2 + px * offsetDist, ly2 + py * offsetDist);
+            gc.strokeLine(lx1 - px * offsetDist, ly1 - py * offsetDist,
+                          lx2 - px * offsetDist, ly2 - py * offsetDist);
+            gc.restore();
+        }
+
         // Brown-tinted bicycle lane background in 3D projection
-        gc.setStroke(Color.rgb(139, 90, 43, 0.28));
+        gc.setStroke(c(Color.rgb(139, 90, 43, 0.28)));
         gc.setLineWidth(10.0);
         gc.strokeLine(lx1 + px * 59.0, ly1 + py * 59.0, lx2 + px * 59.0, ly2 + py * 59.0);
         gc.strokeLine(lx1 - px * 59.0, ly1 - py * 59.0, lx2 - px * 59.0, ly2 - py * 59.0);
 
-        gc.setStroke(Color.rgb(240, 200, 30, 0.9)); 
+        // Yellow double center line
+        if (isNight) {
+            gc.save();
+            gc.setEffect(new Glow(0.35));
+            gc.setStroke(Color.rgb(255, 215, 0, 0.75)); // Soft Yellow Glow
+        } else {
+            gc.setStroke(c(Color.rgb(240, 200, 30, 0.9))); 
+        }
         gc.setLineWidth(2.0); 
+        gc.setLineDashes(null);
         gc.strokeLine(lx1, ly1, lx2, ly2);
+        if (isNight) {
+            gc.restore();
+        }
 
-        gc.setStroke(Color.rgb(230, 230, 230, 0.7)); 
+        // Animated lane dividers - disabled movement, only static glow
+        if (isNight) {
+            gc.save();
+            gc.setEffect(new Glow(0.35));
+            gc.setStroke(Color.rgb(255, 255, 255, 0.70)); // Soft White Glow
+        } else {
+            gc.setStroke(c(Color.rgb(230, 230, 230, 0.7))); 
+        }
         gc.setLineWidth(1.2); 
-        gc.setLineDashes(10, 8);
+        
         // Divider 1
+        gc.setLineDashes(10, 8);
         gc.strokeLine(lx1 + px * 18.0, ly1 + py * 18.0, lx2 + px * 18.0, ly2 + py * 18.0);
         gc.strokeLine(lx1 - px * 18.0, ly1 - py * 18.0, lx2 - px * 18.0, ly2 - py * 18.0);
+
         // Divider 2
         gc.strokeLine(lx1 + px * 36.0, ly1 + py * 36.0, lx2 + px * 36.0, ly2 + py * 36.0);
         gc.strokeLine(lx1 - px * 36.0, ly1 - py * 36.0, lx2 - px * 36.0, ly2 - py * 36.0);
+
+        if (isNight) {
+            gc.restore();
+        }
         
         // Solid divider for bicycle lane (lane 2-3)
+        if (isNight) {
+            gc.save();
+            gc.setEffect(new Glow(0.35));
+            gc.setStroke(Color.rgb(255, 255, 255, 0.70)); // Soft White Glow
+        } else {
+            gc.setStroke(c(Color.rgb(255, 255, 255, 0.9)));
+        }
         gc.setLineDashes(null);
-        gc.setStroke(Color.rgb(255, 255, 255, 0.9));
         gc.strokeLine(lx1 + px * 54.0, ly1 + py * 54.0, lx2 + px * 54.0, ly2 + py * 54.0);
         gc.strokeLine(lx1 - px * 54.0, ly1 - py * 54.0, lx2 - px * 54.0, ly2 - py * 54.0);
+        if (isNight) {
+            gc.restore();
+        }
     }
 
     private void drawIntersection(GraphicsContext gc, Intersection inter) {
         double r = inter.getRadius();
         
-        gc.setFill(CURB);
+        gc.setFill(c(CURB));
         gc.fillOval(inter.getCx() - r - 6, inter.getCy() - r - 6, (r + 6)*2, (r + 6)*2);
         
-        gc.setFill(ASPHALT);
+        gc.setFill(c(ASPHALT));
         gc.fillOval(inter.getCx() - r, inter.getCy() - r, r*2, r*2);
-
+ 
         if (inter.getType() == Intersection.Type.FIVE_WAY) {
-            gc.setFill(Color.rgb(180, 180, 180));
+            gc.setFill(c(Color.rgb(180, 180, 180)));
             gc.fillOval(inter.getCx() - r*0.48, inter.getCy() - r*0.48, r*0.96, r*0.96);
-            gc.setStroke(CURB);
+            gc.setStroke(c(CURB));
             gc.setLineWidth(2);
             gc.strokeOval(inter.getCx() - r*0.48, inter.getCy() - r*0.48, r*0.96, r*0.96);
             
-            gc.setFill(Color.rgb(90, 190, 80));
+            gc.setFill(c(Color.rgb(90, 190, 80)));
             double islandR = 56;
             gc.fillOval(inter.getCx() - islandR, inter.getCy() - islandR, islandR * 2, islandR * 2);
             
-            gc.setFill(Color.rgb(100, 200, 255, 0.8));
+            if (SimConfig.isNightMode()) {
+                gc.save();
+                gc.setEffect(new Glow(0.85));
+            }
+            gc.setFill(c(Color.rgb(100, 200, 255, 0.8)));
             gc.fillOval(inter.getCx() - r*0.25, inter.getCy() - r*0.25, r*0.5, r*0.5);
-            gc.setStroke(Color.rgb(200, 200, 200));
+            gc.setStroke(c(Color.rgb(200, 200, 200)));
             gc.setLineWidth(3);
             gc.strokeOval(inter.getCx() - r*0.25, inter.getCy() - r*0.25, r*0.5, r*0.5);
+            if (SimConfig.isNightMode()) {
+                gc.restore();
+            }
             
-            gc.setStroke(Color.rgb(255, 255, 255, 0.6));
+            gc.setStroke(c(Color.rgb(255, 255, 255, 0.6)));
             gc.setLineWidth(1.5);
             gc.setLineDashes(10, 8);
             // Inner divider (between lane 0 and 1)
@@ -229,7 +286,7 @@ public class Renderer3D implements SceneRenderer {
             gc.strokeOval(inter.getCx() - rDiv2, inter.getCy() - rDiv2, rDiv2 * 2, rDiv2 * 2);
             gc.setLineDashes(null);
             
-            gc.setFill(Color.rgb(240, 240, 240));
+            gc.setFill(c(Color.rgb(240, 240, 240)));
             gc.fillOval(inter.getCx() - r*0.1, inter.getCy() - r*0.1, r*0.2, r*0.2);
         }
 
@@ -239,37 +296,53 @@ public class Renderer3D implements SceneRenderer {
                 BasicRenderer.drawBeautifulCrosswalk(gc, inter.getCx(), inter.getCy(), inter.getRadius(), dir.angleDeg);
             }
         } else {
-            // Roundabout intersection arms
+            // Roundabout arms in 3D
             com.trafficsim.model.intersection.FiveWayIntersection fwi = (com.trafficsim.model.intersection.FiveWayIntersection) inter;
             for (int i = 0; i < fwi.getNumArms(); i++) {
                 BasicRenderer.drawBeautifulCrosswalk(gc, inter.getCx(), inter.getCy(), inter.getRadius(), 360.0 - fwi.getArmAngle(i));
             }
         }
 
-        gc.setFill(Color.rgb(255, 255, 255, 0.6));
+        gc.setFill(c(Color.rgb(255, 255, 255, 0.6)));
         gc.setFont(Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 12));
         gc.setTextAlign(TextAlignment.CENTER);
         gc.fillText(inter.getTypeName(), inter.getCx(), inter.getCy() + 4);
+
+        // Radial streetlight at night
+        double amb = SimConfig.getAmbientLight();
+        if (amb < 0.95) {
+            gc.save();
+            gc.setEffect(new Glow(0.65));
+            javafx.scene.paint.RadialGradient shadow = new javafx.scene.paint.RadialGradient(
+                0, 0, inter.getCx(), inter.getCy(), inter.getRadius() * 1.5, false,
+                javafx.scene.paint.CycleMethod.NO_CYCLE,
+                new javafx.scene.paint.Stop(0.0, Color.rgb(255, 240, 180, (1.0 - amb) * 0.35)),
+                new javafx.scene.paint.Stop(1.0, Color.TRANSPARENT)
+            );
+            gc.setFill(shadow);
+            gc.fillOval(inter.getCx() - inter.getRadius()*1.5, inter.getCy() - inter.getRadius()*1.5, inter.getRadius()*3, inter.getRadius()*3);
+            gc.restore();
+        }
     }
 
     private void addCityBlockToRenderables(GraphicsContext gc, List<Renderable3D> renderables, double x, double y, double size, Random rng, SimScene scene) {
         double pad = 8;
-        gc.setFill(Color.rgb(115, 175, 95));
+        gc.setFill(c(Color.rgb(115, 175, 95)));
         gc.fillRect(x + pad, y + pad, size - pad*2, size - pad*2);
-        gc.setStroke(Color.rgb(90, 150, 70));
+        gc.setStroke(c(Color.rgb(90, 150, 70)));
         gc.setLineWidth(2);
         gc.strokeRect(x + pad, y + pad, size - pad*2, size - pad*2);
 
         int type = rng.nextInt(5);
         if (type == 0) {
-            gc.setFill(Color.rgb(190, 190, 170));
+            gc.setFill(c(Color.rgb(190, 190, 170)));
             gc.fillOval(x + size/2 - 25, y + size/2 - 25, 50, 50);
             gc.fillOval(x + size/2 - 35, y + size/2 - 6, 70, 12);
             gc.fillOval(x + size/2 - 6, y + size/2 - 35, 12, 70);
             
-            gc.setFill(Color.rgb(100, 180, 220)); 
+            gc.setFill(c(Color.rgb(100, 180, 220))); 
             gc.fillOval(x + size/2 - 14, y + size/2 - 14, 28, 28);
-            gc.setStroke(Color.WHITE);
+            gc.setStroke(c(Color.WHITE));
             gc.setLineWidth(2);
             gc.strokeOval(x + size/2 - 14, y + size/2 - 14, 28, 28);
             
@@ -291,7 +364,7 @@ public class Renderer3D implements SceneRenderer {
                 default -> Color.rgb(190, 190, 200);
             };
             
-            gc.setFill(Color.rgb(0, 0, 0, 0.22));
+            gc.setFill(c(Color.rgb(0, 0, 0, 0.22)));
             gc.fillRect(bx + 5, by + 5, bW, bD);
 
             double centerX = bx + bW/2;
@@ -314,23 +387,23 @@ public class Renderer3D implements SceneRenderer {
         double trunkHeight = 11;
         double canopyHeight = trunkHeight + r;
         
-        gc.setStroke(Color.rgb(101, 67, 33));
+        gc.setStroke(c(Color.rgb(101, 67, 33)));
         gc.setLineWidth(3.0);
         gc.strokeLine(tx, ty, getProjX(tx, trunkHeight), getProjY(ty, trunkHeight));
         
-        gc.setFill(Color.rgb(0, 0, 0, 0.2));
+        gc.setFill(c(Color.rgb(0, 0, 0, 0.2)));
         gc.fillOval(tx - 3, ty - 2, 6, 4);
         
-        gc.setFill(Color.rgb(0, 0, 0, 0.22));
+        gc.setFill(c(Color.rgb(0, 0, 0, 0.22)));
         gc.fillOval(tx - r*0.7, ty - r*0.45, r*1.4, r*0.9);
         
         double cpx = getProjX(tx, canopyHeight);
         double cpy = getProjY(ty, canopyHeight);
         
-        gc.setFill(leafColor);
+        gc.setFill(c(leafColor));
         gc.fillOval(cpx - r, cpy - r, r*2, r*2);
         
-        gc.setFill(leafColor.brighter().brighter());
+        gc.setFill(c(leafColor.brighter().brighter()));
         gc.fillOval(cpx - r*0.5, cpy - r*0.6, r, r);
     }
 
@@ -345,10 +418,10 @@ public class Renderer3D implements SceneRenderer {
         double rx3 = getProjX(x3, bHeight), ry3 = getProjY(y3, bHeight);
         double rx4 = getProjX(x4, bHeight), ry4 = getProjY(y4, bHeight);
         
-        Color westColor = roofColor.darker();
-        Color southColor = roofColor.darker().darker();
-        Color northColor = roofColor.darker().darker().darker();
-        Color eastColor = northColor.darker();
+        Color westColor = c(roofColor.darker());
+        Color southColor = c(roofColor.darker().darker());
+        Color northColor = c(roofColor.darker().darker().darker());
+        Color eastColor = c(northColor.darker());
         
         gc.setFill(northColor);
         gc.fillPolygon(new double[]{x1, x2, rx2, rx1}, new double[]{y1, y2, ry2, ry1}, 4);
@@ -364,19 +437,19 @@ public class Renderer3D implements SceneRenderer {
         gc.fillPolygon(new double[]{x3, x4, rx4, rx3}, new double[]{y3, y4, ry4, ry3}, 4);
         drawWindowsOnWall(gc, new double[]{x3, y3}, new double[]{x4, y4}, new double[]{rx4, ry4}, new double[]{rx3, ry3}, bHeight);
         
-        gc.setFill(roofColor);
+        gc.setFill(c(roofColor));
         gc.fillPolygon(new double[]{rx1, rx2, rx3, rx4}, new double[]{ry1, ry2, ry3, ry4}, 4);
         
-        gc.setStroke(roofColor.brighter());
+        gc.setStroke(c(roofColor.brighter()));
         gc.setLineWidth(1.5);
         gc.strokePolygon(new double[]{rx1, rx2, rx3, rx4}, new double[]{ry1, ry2, ry3, ry4}, 4);
         
-        gc.setFill(Color.rgb(130, 130, 130));
+        gc.setFill(c(Color.rgb(130, 130, 130)));
         double acSize = 10;
         double acx = rx1 + (rx3 - rx1)*0.3;
         double acy = ry1 + (ry3 - ry1)*0.3;
         gc.fillRect(acx, acy, acSize, acSize);
-        gc.setFill(Color.rgb(70, 70, 70));
+        gc.setFill(c(Color.rgb(70, 70, 70)));
         gc.fillOval(acx + 1.5, acy + 1.5, acSize - 3, acSize - 3);
     }
 
@@ -385,7 +458,8 @@ public class Renderer3D implements SceneRenderer {
         int cols = 4;
         if (floors < 2) return;
         
-        gc.setFill(Color.rgb(180, 220, 255, 0.65));
+        double amb = SimConfig.getAmbientLight();
+        boolean isNight = SimConfig.isNightMode();
         
         for (int f = 0; f < floors; f++) {
             double v1 = 0.12 + ((double)f / floors) * 0.75;
@@ -400,6 +474,19 @@ public class Renderer3D implements SceneRenderer {
                 double[] w3 = getBilinearPoint(A, B, C, D, u2, v2);
                 double[] w4 = getBilinearPoint(A, B, C, D, u1, v2);
                 
+                if (isNight) {
+                    int coordHash = (int)(A[0] * 17 + A[1] * 31 + f * 7 + c * 13);
+                    if (coordHash % 4 == 0) {
+                        gc.save();
+                        gc.setEffect(new Glow(0.85));
+                        gc.setFill(Color.rgb(255, 235, 120, (1.0 - amb) * 0.95));
+                        gc.fillPolygon(new double[]{w1[0], w2[0], w3[0], w4[0]}, new double[]{w1[1], w2[1], w3[1], w4[1]}, 4);
+                        gc.restore();
+                        continue;
+                    }
+                }
+                
+                gc.setFill(Color.color(0.7 * amb, 0.85 * amb, 1.0 * amb, 0.65));
                 gc.fillPolygon(new double[]{w1[0], w2[0], w3[0], w4[0]}, new double[]{w1[1], w2[1], w3[1], w4[1]}, 4);
             }
         }
@@ -410,7 +497,7 @@ public class Renderer3D implements SceneRenderer {
         double y = tl.getY();
         double poleHeight = 28;
         
-        gc.setStroke(Color.rgb(0, 0, 0, 0.25));
+        gc.setStroke(c(Color.rgb(0, 0, 0, 0.25)));
         gc.setLineWidth(2.5);
         gc.strokeLine(x, y, x + 6, y + 4);
         
@@ -418,7 +505,7 @@ public class Renderer3D implements SceneRenderer {
         double py0 = y;
         double px1 = getProjX(x, poleHeight);
         double py1 = getProjY(y, poleHeight);
-        gc.setStroke(Color.rgb(80, 80, 80));
+        gc.setStroke(c(Color.rgb(80, 80, 80)));
         gc.setLineWidth(2.5);
         gc.strokeLine(px0, py0, px1, py1);
         
@@ -429,14 +516,14 @@ public class Renderer3D implements SceneRenderer {
         double ax1 = px1 + armLength * Math.cos(armAngleRad);
         double ay1 = py1 + armLength * Math.sin(armAngleRad);
         
-        gc.setStroke(Color.rgb(90, 90, 90));
+        gc.setStroke(c(Color.rgb(90, 90, 90)));
         gc.setLineWidth(1.8);
         gc.strokeLine(ax0, ay0, ax1, ay1);
         
         double hx = ax1;
         double hy = ay1;
         
-        gc.setFill(Color.rgb(20, 20, 20));
+        gc.setFill(c(Color.rgb(20, 20, 20)));
         gc.fillRoundRect(hx - 3.5, hy - 7, 7, 14, 2, 2);
         
         boolean rOn = tl.isRed(), yOn = tl.isYellow(), gOn = tl.isGreen();
@@ -490,8 +577,9 @@ public class Renderer3D implements SceneRenderer {
         roof[3] = getProjPt(cx, cy, phi, xMin, yMax, zMax);
         
         Color roofColor = color;
-        Color wallColor1 = color.darker();
-        Color wallColor2 = color.darker().darker();
+        Color wallColor1 = c(color.darker());
+        Color wallColor2 = c(color.darker().darker());
+        Color wallColor1Brighter = c(color.darker().brighter());
         
         // North face (0 -> 1)
         gc.setFill(wallColor1);
@@ -504,7 +592,7 @@ public class Renderer3D implements SceneRenderer {
                        new double[]{base[0][1], base[3][1], roof[3][1], roof[0][1]}, 4);
                        
         // East face (1 -> 2)
-        gc.setFill(wallColor1.brighter());
+        gc.setFill(wallColor1Brighter);
         gc.fillPolygon(new double[]{base[1][0], base[2][0], roof[2][0], roof[1][0]},
                        new double[]{base[1][1], base[2][1], roof[2][1], roof[1][1]}, 4);
                        
@@ -514,12 +602,12 @@ public class Renderer3D implements SceneRenderer {
                        new double[]{base[2][1], base[3][1], roof[3][1], roof[2][1]}, 4);
                        
         // Roof
-        gc.setFill(roofColor);
+        gc.setFill(c(roofColor));
         gc.fillPolygon(new double[]{roof[0][0], roof[1][0], roof[2][0], roof[3][0]},
                        new double[]{roof[0][1], roof[1][1], roof[2][1], roof[3][1]}, 4);
                        
         // Roof border
-        gc.setStroke(roofColor.brighter());
+        gc.setStroke(c(roofColor.brighter()));
         gc.setLineWidth(0.8);
         gc.strokePolygon(new double[]{roof[0][0], roof[1][0], roof[2][0], roof[3][0]},
                          new double[]{roof[0][1], roof[1][1], roof[2][1], roof[3][1]}, 4);
@@ -533,10 +621,10 @@ public class Renderer3D implements SceneRenderer {
         double[] tR = getProjPt(cx, cy, phi, xTop, yMax, zTop);
         double[] tL = getProjPt(cx, cy, phi, xTop, yMin, zTop);
         
-        gc.setFill(color);
+        gc.setFill(c(color));
         gc.fillPolygon(new double[]{bL[0], bR[0], tR[0], tL[0]},
                        new double[]{bL[1], bR[1], tR[1], tL[1]}, 4);
-        gc.setStroke(color.brighter());
+        gc.setStroke(c(color.brighter()));
         gc.setLineWidth(0.5);
         gc.strokePolygon(new double[]{bL[0], bR[0], tR[0], tL[0]},
                          new double[]{bL[1], bR[1], tR[1], tL[1]}, 4);
@@ -557,165 +645,182 @@ public class Renderer3D implements SceneRenderer {
         else if (v instanceof com.trafficsim.model.vehicle.Motorbike) Hz = 8.5;
         else if (v instanceof com.trafficsim.model.vehicle.Bicycle) Hz = 7.5;
         
-        if (v instanceof com.trafficsim.model.vehicle.Motorbike || v instanceof com.trafficsim.model.vehicle.Bicycle) {
-            draw3DTwoWheeler(gc, v, length, width, Hz);
-            return;
-        }
-        
-        // Ground shadow
-        gc.setFill(Color.rgb(0, 0, 0, 0.35));
-        gc.save();
-        gc.translate(x, y);
-        gc.rotate(v.getHeadingAngleDeg());
-        gc.fillRoundRect(-length/2 - 1, -width/2 - 1, length + 2, width + 2, 4, 4);
-        gc.restore();
-        
-        draw3DHeadlightBeams(gc, x, y, phi, length, width);
-        
-        Color baseColor = Color.web(v.getColor());
-        if (v instanceof com.trafficsim.model.vehicle.PoliceCar) {
-            baseColor = Color.rgb(20, 20, 25);
-        } else if (v instanceof com.trafficsim.model.vehicle.Ambulance) {
-            baseColor = Color.WHITE;
-        } else if (v instanceof com.trafficsim.model.vehicle.FireTruck) {
-            baseColor = Color.rgb(200, 30, 30);
-        }
-        
-        double L2 = length / 2;
-        double W2 = width / 2;
-        Color glassColor = Color.rgb(25, 30, 45, 0.85);
-
-        if (v instanceof com.trafficsim.model.vehicle.Bus) {
-            // BUS MODEL
-            draw3DBoxPart(gc, x, y, phi, -L2, L2, -W2, W2, 0, Hz, baseColor);
-            draw3DSlopedFace(gc, x, y, phi, L2 - 0.5, L2 - 0.5, -W2 * 0.9, W2 * 0.9, Hz * 0.3, Hz * 0.85, glassColor);
-            
-            // Side window bands
-            double[] wL1 = getProjPt(x, y, phi, -L2 * 0.9, -W2 - 0.1, Hz * 0.4);
-            double[] wL2 = getProjPt(x, y, phi, L2 * 0.8, -W2 - 0.1, Hz * 0.4);
-            double[] wL3 = getProjPt(x, y, phi, L2 * 0.8, -W2 - 0.1, Hz * 0.8);
-            double[] wL4 = getProjPt(x, y, phi, -L2 * 0.9, -W2 - 0.1, Hz * 0.8);
-            gc.setFill(glassColor);
-            gc.fillPolygon(new double[]{wL1[0], wL2[0], wL3[0], wL4[0]}, new double[]{wL1[1], wL2[1], wL3[1], wL4[1]}, 4);
-            
-            double[] wR1 = getProjPt(x, y, phi, -L2 * 0.9, W2 + 0.1, Hz * 0.4);
-            double[] wR2 = getProjPt(x, y, phi, L2 * 0.8, W2 + 0.1, Hz * 0.4);
-            double[] wR3 = getProjPt(x, y, phi, L2 * 0.8, W2 + 0.1, Hz * 0.8);
-            double[] wR4 = getProjPt(x, y, phi, -L2 * 0.9, W2 + 0.1, Hz * 0.8);
-            gc.setFill(glassColor);
-            gc.fillPolygon(new double[]{wR1[0], wR2[0], wR3[0], wR4[0]}, new double[]{wR1[1], wR2[1], wR3[1], wR4[1]}, 4);
-            
-        } else if (v instanceof com.trafficsim.model.vehicle.Ambulance) {
-            // AMBULANCE MODEL
-            draw3DBoxPart(gc, x, y, phi, L2 * 0.2, L2, -W2, W2, 0, Hz * 0.6, baseColor);
-            draw3DBoxPart(gc, x, y, phi, -L2, L2 * 0.2, -W2, W2, 0, Hz, baseColor);
-            draw3DSlopedFace(gc, x, y, phi, L2 * 0.2, L2 * 0.15, -W2 * 0.9, W2 * 0.9, Hz * 0.6, Hz, glassColor);
-            
-            // Red stripes
-            double[] sL1 = getProjPt(x, y, phi, -L2 * 0.95, -W2 - 0.1, Hz * 0.35);
-            double[] sL2 = getProjPt(x, y, phi, L2 * 0.15, -W2 - 0.1, Hz * 0.35);
-            double[] sL3 = getProjPt(x, y, phi, L2 * 0.15, -W2 - 0.1, Hz * 0.5);
-            double[] sL4 = getProjPt(x, y, phi, -L2 * 0.95, -W2 - 0.1, Hz * 0.5);
-            gc.setFill(Color.rgb(220, 30, 30));
-            gc.fillPolygon(new double[]{sL1[0], sL2[0], sL3[0], sL4[0]}, new double[]{sL1[1], sL2[1], sL3[1], sL4[1]}, 4);
-            
-            // Red cross on side
-            double[] cL1_h = getProjPt(x, y, phi, -L2 * 0.45, -W2 - 0.2, Hz * 0.55);
-            double[] cL2_h = getProjPt(x, y, phi, -L2 * 0.25, -W2 - 0.2, Hz * 0.55);
-            double[] cL3_h = getProjPt(x, y, phi, -L2 * 0.25, -W2 - 0.2, Hz * 0.65);
-            double[] cL4_h = getProjPt(x, y, phi, -L2 * 0.45, -W2 - 0.2, Hz * 0.65);
-            gc.setFill(Color.rgb(220, 30, 30));
-            gc.fillPolygon(new double[]{cL1_h[0], cL2_h[0], cL3_h[0], cL4_h[0]}, new double[]{cL1_h[1], cL2_h[1], cL3_h[1], cL4_h[1]}, 4);
-            
-            double[] cL1_v = getProjPt(x, y, phi, -L2 * 0.38, -W2 - 0.2, Hz * 0.47);
-            double[] cL2_v = getProjPt(x, y, phi, -L2 * 0.32, -W2 - 0.2, Hz * 0.47);
-            double[] cL3_v = getProjPt(x, y, phi, -L2 * 0.32, -W2 - 0.2, Hz * 0.73);
-            double[] cL4_v = getProjPt(x, y, phi, -L2 * 0.38, -W2 - 0.2, Hz * 0.73);
-            gc.fillPolygon(new double[]{cL1_v[0], cL2_v[0], cL3_v[0], cL4_v[0]}, new double[]{cL1_v[1], cL2_v[1], cL3_v[1], cL4_v[1]}, 4);
-            
-        } else if (v instanceof com.trafficsim.model.vehicle.FireTruck) {
-            // FIRE TRUCK MODEL
-            draw3DBoxPart(gc, x, y, phi, L2 * 0.2, L2, -W2, W2, 0, Hz, baseColor);
-            draw3DBoxPart(gc, x, y, phi, -L2, L2 * 0.2, -W2 * 0.95, W2 * 0.95, 0, Hz * 0.75, Color.rgb(180, 25, 25));
-            draw3DSlopedFace(gc, x, y, phi, L2 - 0.5, L2 - 0.5, -W2 * 0.9, W2 * 0.9, Hz * 0.4, Hz * 0.85, glassColor);
-            
-            // Ladder on top
-            draw3DBoxPart(gc, x, y, phi, -L2 * 0.8, L2 * 0.1, -W2 * 0.25, W2 * 0.25, Hz * 0.75, Hz * 0.75 + 3.0, Color.rgb(200, 200, 200));
-            gc.setStroke(Color.rgb(130, 130, 130));
-            gc.setLineWidth(1.0);
-            for (double rxVal = -L2 * 0.7; rxVal <= L2 * 0.0; rxVal += 3.5) {
-                double[] lp1 = getProjPt(x, y, phi, rxVal, -W2 * 0.25, Hz * 0.75 + 3.0);
-                double[] lp2 = getProjPt(x, y, phi, rxVal, W2 * 0.25, Hz * 0.75 + 3.0);
-                gc.strokeLine(lp1[0], lp1[1], lp2[0], lp2[1]);
+        this.drawingVehicle = true;
+        try {
+            if (v instanceof com.trafficsim.model.vehicle.Motorbike || v instanceof com.trafficsim.model.vehicle.Bicycle) {
+                draw3DTwoWheeler(gc, v, length, width, Hz);
+                return;
             }
             
-        } else {
-            // SEDAN / CAR MODEL
-            boolean isPolice = (v instanceof com.trafficsim.model.vehicle.PoliceCar);
-            Color cabColor = isPolice ? Color.WHITE : baseColor;
+            // Ground shadow
+            gc.setFill(Color.rgb(0, 0, 0, 0.35));
+            gc.save();
+            gc.translate(x, y);
+            gc.rotate(v.getHeadingAngleDeg());
+            gc.fillRoundRect(-length/2 - 1, -width/2 - 1, length + 2, width + 2, 4, 4);
+            gc.restore();
             
-            draw3DBoxPart(gc, x, y, phi, L2 * 0.2, L2, -W2, W2, 0, Hz * 0.55, baseColor);
-            draw3DBoxPart(gc, x, y, phi, -L2 * 0.3, L2 * 0.2, -W2 * 0.9, W2 * 0.9, 0, Hz, cabColor);
-            draw3DBoxPart(gc, x, y, phi, -L2, -L2 * 0.3, -W2, W2, 0, Hz * 0.55, baseColor);
+            draw3DHeadlightBeams(gc, x, y, phi, length, width);
             
-            draw3DSlopedFace(gc, x, y, phi, L2 * 0.2, L2 * 0.12, -W2 * 0.8, W2 * 0.8, Hz * 0.55, Hz, glassColor);
-            draw3DSlopedFace(gc, x, y, phi, -L2 * 0.3, -L2 * 0.38, -W2 * 0.8, W2 * 0.8, Hz, Hz * 0.55, glassColor);
+            Color baseColor = Color.web(v.getColor());
+            if (v instanceof com.trafficsim.model.vehicle.PoliceCar) {
+                baseColor = Color.rgb(20, 20, 25);
+            } else if (v instanceof com.trafficsim.model.vehicle.Ambulance) {
+                baseColor = Color.WHITE;
+            } else if (v instanceof com.trafficsim.model.vehicle.FireTruck) {
+                baseColor = Color.rgb(200, 30, 30);
+            }
             
-            if (isPolice) {
-                double[] textP = getProjPt(x, y, phi, -L2 * 0.05, 0, Hz + 0.1);
+            double L2 = length / 2;
+            double W2 = width / 2;
+            Color glassColor = Color.rgb(25, 30, 45, 0.85);
+    
+            if (v instanceof com.trafficsim.model.vehicle.Bus) {
+                // BUS MODEL
+                draw3DBoxPart(gc, x, y, phi, -L2, L2, -W2, W2, 0, Hz, baseColor);
+                draw3DSlopedFace(gc, x, y, phi, L2 - 0.5, L2 - 0.5, -W2 * 0.9, W2 * 0.9, Hz * 0.3, Hz * 0.85, glassColor);
+                
+                // Side window bands
+                double[] wL1 = getProjPt(x, y, phi, -L2 * 0.9, -W2 - 0.1, Hz * 0.4);
+                double[] wL2 = getProjPt(x, y, phi, L2 * 0.8, -W2 - 0.1, Hz * 0.4);
+                double[] wL3 = getProjPt(x, y, phi, L2 * 0.8, -W2 - 0.1, Hz * 0.8);
+                double[] wL4 = getProjPt(x, y, phi, -L2 * 0.9, -W2 - 0.1, Hz * 0.8);
+                gc.setFill(glassColor);
+                gc.fillPolygon(new double[]{wL1[0], wL2[0], wL3[0], wL4[0]}, new double[]{wL1[1], wL2[1], wL3[1], wL4[1]}, 4);
+                
+                double[] wR1 = getProjPt(x, y, phi, -L2 * 0.9, W2 + 0.1, Hz * 0.4);
+                double[] wR2 = getProjPt(x, y, phi, L2 * 0.8, W2 + 0.1, Hz * 0.4);
+                double[] wR3 = getProjPt(x, y, phi, L2 * 0.8, W2 + 0.1, Hz * 0.8);
+                double[] wR4 = getProjPt(x, y, phi, -L2 * 0.9, W2 + 0.1, Hz * 0.8);
+                gc.setFill(glassColor);
+                gc.fillPolygon(new double[]{wR1[0], wR2[0], wR3[0], wR4[0]}, new double[]{wR1[1], wR2[1], wR3[1], wR4[1]}, 4);
+                
+            } else if (v instanceof com.trafficsim.model.vehicle.Ambulance) {
+                // AMBULANCE MODEL
+                draw3DBoxPart(gc, x, y, phi, L2 * 0.2, L2, -W2, W2, 0, Hz * 0.6, baseColor);
+                draw3DBoxPart(gc, x, y, phi, -L2, L2 * 0.2, -W2, W2, 0, Hz, baseColor);
+                draw3DSlopedFace(gc, x, y, phi, L2 * 0.2, L2 * 0.15, -W2 * 0.9, W2 * 0.9, Hz * 0.6, Hz, glassColor);
+                
+                // Red stripes
+                double[] sL1 = getProjPt(x, y, phi, -L2 * 0.95, -W2 - 0.1, Hz * 0.35);
+                double[] sL2 = getProjPt(x, y, phi, L2 * 0.15, -W2 - 0.1, Hz * 0.35);
+                double[] sL3 = getProjPt(x, y, phi, L2 * 0.15, -W2 - 0.1, Hz * 0.5);
+                double[] sL4 = getProjPt(x, y, phi, -L2 * 0.95, -W2 - 0.1, Hz * 0.5);
+                gc.setFill(Color.rgb(220, 30, 30));
+                gc.fillPolygon(new double[]{sL1[0], sL2[0], sL3[0], sL4[0]}, new double[]{sL1[1], sL2[1], sL3[1], sL4[1]}, 4);
+                
+                // Red cross on side
+                double[] cL1_h = getProjPt(x, y, phi, -L2 * 0.45, -W2 - 0.2, Hz * 0.55);
+                double[] cL2_h = getProjPt(x, y, phi, -L2 * 0.25, -W2 - 0.2, Hz * 0.55);
+                double[] cL3_h = getProjPt(x, y, phi, -L2 * 0.25, -W2 - 0.2, Hz * 0.65);
+                double[] cL4_h = getProjPt(x, y, phi, -L2 * 0.45, -W2 - 0.2, Hz * 0.65);
+                gc.setFill(Color.rgb(220, 30, 30));
+                gc.fillPolygon(new double[]{cL1_h[0], cL2_h[0], cL3_h[0], cL4_h[0]}, new double[]{cL1_h[1], cL2_h[1], cL3_h[1], cL4_h[1]}, 4);
+                
+                double[] cL1_v = getProjPt(x, y, phi, -L2 * 0.38, -W2 - 0.2, Hz * 0.47);
+                double[] cL2_v = getProjPt(x, y, phi, -L2 * 0.32, -W2 - 0.2, Hz * 0.47);
+                double[] cL3_v = getProjPt(x, y, phi, -L2 * 0.32, -W2 - 0.2, Hz * 0.73);
+                double[] cL4_v = getProjPt(x, y, phi, -L2 * 0.38, -W2 - 0.2, Hz * 0.73);
+                gc.fillPolygon(new double[]{cL1_v[0], cL2_v[0], cL3_v[0], cL4_v[0]}, new double[]{cL1_v[1], cL2_v[1], cL3_v[1], cL4_v[1]}, 4);
+                
+            } else if (v instanceof com.trafficsim.model.vehicle.FireTruck) {
+                // FIRE TRUCK MODEL
+                draw3DBoxPart(gc, x, y, phi, L2 * 0.2, L2, -W2, W2, 0, Hz, baseColor);
+                draw3DBoxPart(gc, x, y, phi, -L2, L2 * 0.2, -W2 * 0.95, W2 * 0.95, 0, Hz * 0.75, Color.rgb(180, 25, 25));
+                draw3DSlopedFace(gc, x, y, phi, L2 - 0.5, L2 - 0.5, -W2 * 0.9, W2 * 0.9, Hz * 0.4, Hz * 0.85, glassColor);
+                
+                // Ladder on top
+                draw3DBoxPart(gc, x, y, phi, -L2 * 0.8, L2 * 0.1, -W2 * 0.25, W2 * 0.25, Hz * 0.75, Hz * 0.75 + 3.0, Color.rgb(200, 200, 200));
+                gc.setStroke(Color.rgb(130, 130, 130));
+                gc.setLineWidth(1.0);
+                for (double rxVal = -L2 * 0.7; rxVal <= L2 * 0.0; rxVal += 3.5) {
+                    double[] lp1 = getProjPt(x, y, phi, rxVal, -W2 * 0.25, Hz * 0.75 + 3.0);
+                    double[] lp2 = getProjPt(x, y, phi, rxVal, W2 * 0.25, Hz * 0.75 + 3.0);
+                    gc.strokeLine(lp1[0], lp1[1], lp2[0], lp2[1]);
+                }
+                
+            } else {
+                // SEDAN / CAR MODEL
+                boolean isPolice = (v instanceof com.trafficsim.model.vehicle.PoliceCar);
+                Color cabColor = isPolice ? Color.WHITE : baseColor;
+                
+                draw3DBoxPart(gc, x, y, phi, L2 * 0.2, L2, -W2, W2, 0, Hz * 0.55, baseColor);
+                draw3DBoxPart(gc, x, y, phi, -L2 * 0.3, L2 * 0.2, -W2 * 0.9, W2 * 0.9, 0, Hz, cabColor);
+                draw3DBoxPart(gc, x, y, phi, -L2, -L2 * 0.3, -W2, W2, 0, Hz * 0.55, baseColor);
+                
+                draw3DSlopedFace(gc, x, y, phi, L2 * 0.2, L2 * 0.12, -W2 * 0.8, W2 * 0.8, Hz * 0.55, Hz, glassColor);
+                draw3DSlopedFace(gc, x, y, phi, -L2 * 0.3, -L2 * 0.38, -W2 * 0.8, W2 * 0.8, Hz, Hz * 0.55, glassColor);
+                
+                if (isPolice) {
+                    double[] textP = getProjPt(x, y, phi, -L2 * 0.05, 0, Hz + 0.1);
+                    gc.save();
+                    gc.setFill(Color.rgb(20, 20, 30));
+                    gc.setFont(Font.font("Arial Bold", 6));
+                    gc.setTextAlign(TextAlignment.CENTER);
+                    gc.fillText("POLICE", textP[0], textP[1] + 1);
+                    gc.restore();
+                }
+            }
+            
+            // Thin white highlight outline at night for 3D boxes
+            double amb = SimConfig.getAmbientLight();
+            if (amb < 0.9) {
+                double[] p1 = getProjPt(x, y, phi, -L2, -W2, 0);
+                double[] p2 = getProjPt(x, y, phi, L2, -W2, 0);
+                double[] p3 = getProjPt(x, y, phi, L2, W2, 0);
+                double[] p4 = getProjPt(x, y, phi, -L2, W2, 0);
+                gc.setStroke(Color.rgb(255, 255, 255, 0.40));
+                gc.setLineWidth(0.8);
+                gc.strokePolygon(new double[]{p1[0], p2[0], p3[0], p4[0]}, new double[]{p1[1], p2[1], p3[1], p4[1]}, 4);
+            }
+            
+            // Headlights / Taillights
+            double headlightZ = Hz * 0.25;
+            if (v instanceof com.trafficsim.model.vehicle.Bus) headlightZ = Hz * 0.2;
+            
+            double[] hlLeft = getProjPt(x, y, phi, L2, -W2 * 0.6, headlightZ);
+            double[] hlRight = getProjPt(x, y, phi, L2, W2 * 0.6, headlightZ);
+            gc.setFill(Color.rgb(255, 255, 200, 0.95));
+            gc.fillOval(hlLeft[0] - 1.5, hlLeft[1] - 1.5, 3, 3);
+            gc.fillOval(hlRight[0] - 1.5, hlRight[1] - 1.5, 3, 3);
+            
+            double[] tlLeft = getProjPt(x, y, phi, -L2, -W2 * 0.6, headlightZ);
+            double[] tlRight = getProjPt(x, y, phi, -L2, W2 * 0.6, headlightZ);
+            gc.setFill(Color.rgb(255, 30, 30, 0.95));
+            gc.fillRect(tlLeft[0] - 1.5, tlLeft[1] - 1.0, 3, 2);
+            gc.fillRect(tlRight[0] - 1.5, tlRight[1] - 1.0, 3, 2);
+    
+            // Flashing Light Bars for Emergency Vehicles
+            if (v instanceof com.trafficsim.model.vehicle.PoliceCar || 
+                v instanceof com.trafficsim.model.vehicle.Ambulance || 
+                v instanceof com.trafficsim.model.vehicle.FireTruck) {
+                
+                double zBar = Hz;
+                double xBar = 0;
+                if (v instanceof com.trafficsim.model.vehicle.PoliceCar) {
+                    xBar = -L2 * 0.05;
+                } else if (v instanceof com.trafficsim.model.vehicle.Ambulance) {
+                    xBar = L2 * 0.05;
+                } else if (v instanceof com.trafficsim.model.vehicle.FireTruck) {
+                    xBar = L2 * 0.6;
+                }
+                
+                long time = System.currentTimeMillis();
+                boolean flash = (time % 200) < 100;
+                
                 gc.save();
-                gc.setFill(Color.rgb(20, 20, 30));
-                gc.setFont(Font.font("Arial Bold", 6));
-                gc.setTextAlign(TextAlignment.CENTER);
-                gc.fillText("POLICE", textP[0], textP[1] + 1);
+                gc.setEffect(new Glow(0.9));
+                double[] leftL = getProjPt(x, y, phi, xBar, -W2 * 0.4, zBar + 1.0);
+                double[] rightL = getProjPt(x, y, phi, xBar, W2 * 0.4, zBar + 1.0);
+                
+                gc.setFill(flash ? Color.rgb(255, 30, 30) : Color.rgb(30, 80, 255));
+                gc.fillOval(leftL[0] - 2, leftL[1] - 2, 4, 4);
+                gc.setFill(!flash ? Color.rgb(255, 30, 30) : Color.rgb(30, 80, 255));
+                gc.fillOval(rightL[0] - 2, rightL[1] - 2, 4, 4);
                 gc.restore();
             }
-        }
-        
-        // Headlights / Taillights
-        double headlightZ = Hz * 0.25;
-        if (v instanceof com.trafficsim.model.vehicle.Bus) headlightZ = Hz * 0.2;
-        
-        double[] hlLeft = getProjPt(x, y, phi, L2, -W2 * 0.6, headlightZ);
-        double[] hlRight = getProjPt(x, y, phi, L2, W2 * 0.6, headlightZ);
-        gc.setFill(Color.rgb(255, 255, 200, 0.95));
-        gc.fillOval(hlLeft[0] - 1.5, hlLeft[1] - 1.5, 3, 3);
-        gc.fillOval(hlRight[0] - 1.5, hlRight[1] - 1.5, 3, 3);
-        
-        double[] tlLeft = getProjPt(x, y, phi, -L2, -W2 * 0.6, headlightZ);
-        double[] tlRight = getProjPt(x, y, phi, -L2, W2 * 0.6, headlightZ);
-        gc.setFill(Color.rgb(255, 30, 30, 0.95));
-        gc.fillRect(tlLeft[0] - 1.5, tlLeft[1] - 1.0, 3, 2);
-        gc.fillRect(tlRight[0] - 1.5, tlRight[1] - 1.0, 3, 2);
-
-        // Flashing Light Bars for Emergency Vehicles
-        if (v instanceof com.trafficsim.model.vehicle.PoliceCar || 
-            v instanceof com.trafficsim.model.vehicle.Ambulance || 
-            v instanceof com.trafficsim.model.vehicle.FireTruck) {
-            
-            double zBar = Hz;
-            double xBar = 0;
-            if (v instanceof com.trafficsim.model.vehicle.PoliceCar) {
-                xBar = -L2 * 0.05;
-            } else if (v instanceof com.trafficsim.model.vehicle.Ambulance) {
-                xBar = L2 * 0.05;
-            } else if (v instanceof com.trafficsim.model.vehicle.FireTruck) {
-                xBar = L2 * 0.6;
-            }
-            
-            long time = System.currentTimeMillis();
-            boolean flash = (time % 200) < 100;
-            
-            gc.save();
-            gc.setEffect(new Glow(0.9));
-            double[] leftL = getProjPt(x, y, phi, xBar, -W2 * 0.4, zBar + 1.0);
-            double[] rightL = getProjPt(x, y, phi, xBar, W2 * 0.4, zBar + 1.0);
-            
-            gc.setFill(flash ? Color.rgb(255, 30, 30) : Color.rgb(30, 80, 255));
-            gc.fillOval(leftL[0] - 2, leftL[1] - 2, 4, 4);
-            gc.setFill(!flash ? Color.rgb(255, 30, 30) : Color.rgb(30, 80, 255));
-            gc.fillOval(rightL[0] - 2, rightL[1] - 2, 4, 4);
-            gc.restore();
+        } finally {
+            this.drawingVehicle = false;
         }
     }
 
@@ -724,8 +829,11 @@ public class Renderer3D implements SceneRenderer {
     }
 
     private void draw3DHeadlightBeams(GraphicsContext gc, double x, double y, double phi, double length, double width) {
-        double beamLen = 30;
-        double beamWidth = 12;
+        double amb = SimConfig.getAmbientLight();
+        if (amb >= 0.95) return;
+        
+        double beamLen = 65;
+        double beamWidth = 25;
         
         double cos = Math.cos(phi);
         double sin = Math.sin(phi);
@@ -750,7 +858,8 @@ public class Renderer3D implements SceneRenderer {
         double pblx = getProjX(blx, 0); double pbly = getProjY(bly, 0);
         double pbrx = getProjX(brx, 0); double pbry = getProjY(bry, 0);
         
-        gc.setFill(Color.rgb(255, 255, 180, 0.12));
+        double alpha = (1.0 - amb) * 0.28;
+        gc.setFill(Color.rgb(255, 255, 180, alpha));
         gc.fillPolygon(new double[]{plx, pblx, pbrx, prx}, new double[]{ply, pbly, pbry, pry}, 4);
     }
 
@@ -815,6 +924,12 @@ public class Renderer3D implements SceneRenderer {
             if (Math.hypot(cx - projX, cy - projY) < safeDist + blockRadius) return false;
         }
         return true;
+    }
+
+    private Color c(Color base) {
+        double amb = SimConfig.getAmbientLight();
+        double factor = drawingVehicle ? Math.max(0.60, amb) : amb;
+        return Color.color(base.getRed() * factor, base.getGreen() * factor, base.getBlue() * factor, base.getOpacity());
     }
 
     @Override

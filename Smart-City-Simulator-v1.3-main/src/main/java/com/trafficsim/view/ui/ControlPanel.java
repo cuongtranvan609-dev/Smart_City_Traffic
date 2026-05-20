@@ -63,6 +63,9 @@ public class ControlPanel extends ScrollPane {
             sectionLabel("🖼 HIỂN THỊ"),
             buildRenderMode(),
             sep(),
+            sectionLabel("🌗 THỜI GIAN"),
+            buildTimeSelector(),
+            sep(),
             sectionLabel("🔦 LOẠI ĐÈN"),
             buildLightType(),
             sep(),
@@ -187,6 +190,29 @@ public class ControlPanel extends ScrollPane {
         return new HBox(6, basic, gfx, r3d);
     }
 
+    private VBox buildTimeSelector() {
+        ComboBox<String> cb = new ComboBox<>();
+        cb.getItems().addAll("☀️ Ban ngày", "🌙 Ban đêm", "🔄 Chu kỳ ngày/đêm");
+        cb.setValue("☀️ Ban ngày");
+        cb.setStyle("-fx-background-color:#2a2a40;-fx-text-fill:white;");
+        cb.setOnAction(e -> {
+            switch(cb.getSelectionModel().getSelectedIndex()) {
+                case 0 -> {
+                    com.trafficsim.config.SimConfig.timeMode = com.trafficsim.config.SimConfig.TimeMode.DAY;
+                    com.trafficsim.config.SimConfig.timeOfDay = 12.0;
+                }
+                case 1 -> {
+                    com.trafficsim.config.SimConfig.timeMode = com.trafficsim.config.SimConfig.TimeMode.NIGHT;
+                    com.trafficsim.config.SimConfig.timeOfDay = 24.0;
+                }
+                default -> {
+                    com.trafficsim.config.SimConfig.timeMode = com.trafficsim.config.SimConfig.TimeMode.CYCLE;
+                }
+            }
+        });
+        return new VBox(4, cb);
+    }
+
     // ===== LIGHT TYPE =====
     private VBox buildLightType() {
         ComboBox<String> cb = new ComboBox<>();
@@ -244,11 +270,18 @@ public class ControlPanel extends ScrollPane {
         var scene = controller.getScene();
         long pri = scene.getVehicles().stream().filter(v->v.isPriorityVehicle()).count();
         long yld = scene.getVehicles().stream().filter(v->v.isYieldingForPriority()).count();
+        
+        int hours = (int) com.trafficsim.config.SimConfig.timeOfDay;
+        int mins = (int) ((com.trafficsim.config.SimConfig.timeOfDay - hours) * 60);
+        String timeStr = String.format("%02d:%02d", hours, mins);
+        String dayNight = com.trafficsim.config.SimConfig.isNightMode() ? "Ban đêm" : "Ban ngày";
+
         statsLabel.setText(String.format(
-            "Tổng xe:  %d\nƯu tiên:  %d\nNhường:   %d\nZoom:     %.0f%%\nCảnh:     %s",
+            "Tổng xe:  %d\nƯu tiên:  %d\nNhường:   %d\nZoom:     %.0f%%\nCảnh:     %s\nThời gian:%s (%s)",
             scene.getVehicleCount(), pri, yld,
             simCanvas.getZoom()*100,
-            scene.getSceneType().name()));
+            scene.getSceneType().name(),
+            timeStr, dayNight));
     }
 
     private void loadScene(SimScene.SceneType type) {

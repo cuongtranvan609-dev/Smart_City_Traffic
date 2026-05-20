@@ -18,6 +18,7 @@ com\trafficsim\view\ui\MainWindow.class
 com\trafficsim\model\road\Road.class
 com\trafficsim\model\vehicle\Vehicle.class
 com\trafficsim\view\renderer\GraphicRenderer.class
+com\trafficsim\config\SimConfig$TimeMode.class
 com\trafficsim\controller\TrafficController$TrafficDensity.class
 com\trafficsim\model\intersection\FourWayIntersection.class
 com\trafficsim\view\renderer\SceneRenderer.class
