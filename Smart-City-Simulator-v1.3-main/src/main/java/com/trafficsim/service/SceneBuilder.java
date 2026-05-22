@@ -87,6 +87,8 @@ public class SceneBuilder {
         for (int i = 0; i < 9; i++) {
             if (i == 4) {
                 inters[i] = new FiveWayIntersection(n[i][0], n[i][1], true); // true = 4-way roundabout
+            } else if (i == 6 || i == 7 || i == 8) {
+                inters[i] = new ThreeWayIntersection(n[i][0], n[i][1]);
             } else {
                 inters[i] = new FourWayIntersection(n[i][0], n[i][1]);
             }
@@ -104,9 +106,9 @@ public class SceneBuilder {
         addStub(s, n[2], 1, 0, stub);  addStub(s, n[2], 0, -1, stub);
         addStub(s, n[3], -1, 0, stub);
         addStub(s, n[5], 1, 0, stub);
-        addStub(s, n[6], -1, 0, stub); addStub(s, n[6], 0, 1, stub);
-        addStub(s, n[7], 0, 1, stub);
-        addStub(s, n[8], 1, 0, stub);  addStub(s, n[8], 0, 1, stub);
+        addStub(s, n[6], -1, 0, stub);
+        
+        addStub(s, n[8], 1, 0, stub);
 
         finalize(s);
         return s;
